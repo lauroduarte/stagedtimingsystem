@@ -16,6 +16,11 @@
 #include <LightMqttSettingsService.h>
 #include <LightStateService.h>
 #include <PsychicHttpServer.h>
+#include <ProvaService.h>
+#include <CategoriaService.h>
+#include <AtletaService.h>
+#include <RelogioService.h>
+#include <RFIDService.h>
 
 #define SERIAL_BAUD_RATE 115200
 
@@ -30,6 +35,28 @@ LightStateService lightStateService = LightStateService(&server,
                                                         &esp32sveltekit,
                                                         &lightMqttSettingsService);
 
+ProvaService provaService = ProvaService(&server,
+                                                        &esp32sveltekit,
+                                                        esp32sveltekit.getFS());                                                        
+
+
+CategoriaService categoriaService = CategoriaService(&server,
+                                                        &esp32sveltekit,
+                                                        esp32sveltekit.getFS());
+
+AtletaService atletaService = AtletaService(&server,
+                                                        &esp32sveltekit,
+                                                        esp32sveltekit.getFS());         
+                                                        
+RelogioService relogioService = RelogioService(&server,
+                                                        &esp32sveltekit,
+                                                        esp32sveltekit.getFS());
+
+RFIDService rfidService = RFIDService(&server,
+                                                        &esp32sveltekit,
+                                                        esp32sveltekit.getSecurityManager());  
+                                                
+
 void setup()
 {
     // start serial and filesystem
@@ -42,10 +69,26 @@ void setup()
     lightStateService.begin();
     // start the light service
     lightMqttSettingsService.begin();
+
+    // start the prova service
+    provaService.begin();
+
+    // start the categoria service
+    categoriaService.begin();
+
+    // start the atleta service
+    atletaService.begin();
+
+    // start the relogio service
+    relogioService.begin();
+
+    // start the RFID service
+    rfidService.begin();
 }
 
 void loop()
 {
+    rfidService.loop();
     // Delete Arduino loop task, as it is not needed in this example
     vTaskDelete(NULL);
 }

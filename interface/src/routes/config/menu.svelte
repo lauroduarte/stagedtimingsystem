@@ -2,21 +2,17 @@
 	import logo from '$lib/assets/logo.png';
 	import Github from '~icons/tabler/brand-github';
 	import Discord from '~icons/tabler/brand-discord';
+	import Stopwatch from '~icons/tabler/stopwatch';
+	import Refresh from '~icons/tabler/refresh';
 	import Users from '~icons/tabler/users';
-	import Settings from '~icons/tabler/settings';
-	import Health from '~icons/tabler/stethoscope';
-	import Update from '~icons/tabler/refresh-alert';
-	import WiFi from '~icons/tabler/wifi';
-	import Router from '~icons/tabler/router';
-	import AP from '~icons/tabler/access-point';
-	import Remote from '~icons/tabler/network';
-	import Control from '~icons/tabler/adjustments';
+	import UsersGroup from '~icons/tabler/users-group';
+	import Flag from '~icons/tabler/flag';
+	import Eraser from '~icons/tabler/eraser';
+	import Clock from '~icons/tabler/clock';
 	import Avatar from '~icons/tabler/user-circle';
 	import Logout from '~icons/tabler/logout';
 	import Copyright from '~icons/tabler/copyright';
-	import MQTT from '~icons/tabler/topology-star-3';
-	import NTP from '~icons/tabler/clock-check';
-	import Metrics from '~icons/tabler/report-analytics';
+	import Link from '~icons/tabler/link';
 	import { page } from '$app/state';
 	import { user } from '$lib/stores/user';
 
@@ -45,84 +41,71 @@
 
 	let menuItems = $state([
 		{
-			title: 'Demo App',
-			icon: Control,
-			href: '/demo',
+			title: 'Prova',
+			icon: Flag,
+			href: '/config/prova',
 			feature: true
 		},
 		{
-			title: 'Connections',
-			icon: Remote,
-			feature: page.data.features.mqtt || page.data.features.ntp,
-			submenu: [
-				{
-					title: 'MQTT',
-					icon: MQTT,
-					href: '/connections/mqtt',
-					feature: page.data.features.mqtt
-				},
-				{
-					title: 'NTP',
-					icon: NTP,
-					href: '/connections/ntp',
-					feature: page.data.features.ntp
-				}
-			]
+			title: 'Demo',
+			icon: Flag,
+			href: '/config/demo',
+			feature: true
 		},
 		{
-			title: 'WiFi',
-			icon: WiFi,
-			feature: true,
-			submenu: [
-				{
-					title: 'WiFi Station',
-					icon: Router,
-					href: '/wifi/sta',
-					feature: true
-				},
-				{
-					title: 'Access Point',
-					icon: AP,
-					href: '/wifi/ap',
-					feature: true
-				}
-			]
+			title: 'Categorias',
+			icon: UsersGroup,
+			href: '/config/categoria',
+			feature: true
 		},
 		{
+			title: 'Atletas',
+			icon: Users,
+			href: '/config/atleta',
+			feature: true
+		},
+		{
+			title: 'Relógio',
+			icon: Clock,
+			href: '/config/relogio',
+			feature: true
+		},
+		{
+			title: 'Sincronizar',
+			icon: Refresh,
+			href: '/config/sincronizar',
+			feature: true
+		},
+		{
+			title: 'URL Sincronização',
+			icon: Link,
+			href: '/config/url-sincronizacao',
+			feature: true
+		},
+		{
+			title: 'Resetar Chaveiros RFID',
+			icon: Eraser,
+			href: '/config/reset-rfid',
+			feature: true
+		},
+		{
+			title: 'Cronometrar Especial',
+			icon: Stopwatch,
+			href: '/config/cronometrar',
+			feature: true
+		},
+		{
+			title: 'Cronometrar LAPS',
+			icon: Stopwatch,
+			href: '/config/cronometrar-laps',
+			feature: true
+		},
+{
 			title: 'Users',
 			icon: Users,
 			href: '/user',
 			feature: page.data.features.security && $user.admin
-		},
-		{
-			title: 'System',
-			icon: Settings,
-			feature: true,
-			submenu: [
-				{
-					title: 'System Status',
-					icon: Health,
-					href: '/system/status',
-					feature: true
-				},
-				{
-					title: 'System Metrics',
-					icon: Metrics,
-					href: '/system/metrics',
-					feature: page.data.features.analytics
-				},
-				{
-					title: 'Firmware Update',
-					icon: Update,
-					href: '/system/update',
-					feature:
-						(page.data.features.ota ||
-							page.data.features.upload_firmware ||
-							page.data.features.download_firmware) &&
-						(!page.data.features.security || $user.admin)
-				}
-			]
-		}
+		}																
 	] as menuItem[]);
 
 	function setActiveMenuItem(targetTitle: string) {
@@ -143,7 +126,7 @@
 <div class="bg-base-200 text-base-content flex h-full w-80 flex-col p-4">
 	<!-- Sidebar content here -->
 	<a
-		href="/"
+		href="/config"
 		class="rounded-box mb-4 flex items-center hover:scale-[1.02] active:scale-[0.98]"
 		onclick={() => setActiveMenuItem('')}
 	>

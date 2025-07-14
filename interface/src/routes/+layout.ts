@@ -9,9 +9,9 @@ export const load = (async ({ fetch }) => {
 	const item = await result.json();
 	return {
 		features: item,
-		title: 'ESP32-SvelteKit',
-		github: 'theelims/ESP32-sveltekit',
-		copyright: '2025 theelims',
-		appName: 'ESP32 SvelteKit'
+		title: 'Staged Timing System',
+		github: 'lauroduarte/staged-timing-system',
+		copyright: '2025 lauroduarte',
+		appName: 'Staged Timing System',
 	};
 }) satisfies LayoutLoad;

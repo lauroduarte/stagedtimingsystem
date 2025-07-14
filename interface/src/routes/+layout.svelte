@@ -13,9 +13,6 @@
 	import { notifications } from '$lib/components/toasts/notifications';
 	import { fade } from 'svelte/transition';
 	import '../app.css';
-	import Menu from './menu.svelte';
-	import Statusbar from './statusbar.svelte';
-	import Login from './login.svelte';
 	import type { Analytics } from '$lib/types/models';
 	import type { RSSI } from '$lib/types/models';
 	import type { Battery } from '$lib/types/models';
@@ -129,36 +126,19 @@
 
 	const handleOAT = (data: DownloadOTA) => telemetry.setDownloadOTA(data);
 
-	let menuOpen = $state(false);
 </script>
 
 <svelte:head>
 	<title>{page.data.title}</title>
 </svelte:head>
 
-{#if page.data.features.security && $user.bearer_token === ''}
-	<Login on:signIn={initSocket} />
-{:else}
 	<div class="drawer lg:drawer-open">
-		<input id="main-menu" type="checkbox" class="drawer-toggle" bind:checked={menuOpen} />
 		<div class="drawer-content flex flex-col">
-			<!-- Status bar content here -->
-			<Statusbar />
-
 			<!-- Main page content here -->
 			{@render children?.()}
 		</div>
-		<!-- Side Navigation -->
-		<div class="drawer-side z-30 shadow-lg">
-			<label for="main-menu" class="drawer-overlay"></label>
-			<Menu
-				closeMenu={() => {
-					menuOpen = false;
-				}}
-			/>
-		</div>
 	</div>
-{/if}
+
 
 <Modals>
 	<!-- svelte-ignore a11y_click_events_have_key_events -->

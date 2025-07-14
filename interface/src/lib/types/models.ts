@@ -1,3 +1,13 @@
+export type Relogio = {
+	datetime: string;
+}
+
+export type Prova = {
+	nome: string;
+	data: string;
+	local: string;
+}
+
 export type WifiStatus = {
 	status: number;
 	local_ip: string;
@@ -58,6 +68,10 @@ export type ApSettings = {
 
 export type LightState = {
 	led_on: boolean;
+};
+
+export type ProvaState = {
+	nome: string;
 };
 
 export type BrokerSettings = {
@@ -146,3 +160,20 @@ export type MQTTSettings = {
 	keep_alive: number;
 	clean_session: boolean;
 };
+
+export type Atleta = {
+	nome: string;
+	equipe: string;
+	numeral: number;
+	categoriaId: number;
+};
+
+export type Categoria = {
+	id: number;
+	categoria: string;
+};
+
+export type RFIDCard = {
+	uid: string;
+	numero: number;
+}
