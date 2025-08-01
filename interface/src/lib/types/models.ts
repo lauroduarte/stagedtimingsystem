@@ -177,3 +177,10 @@ export type RFIDCard = {
 	uid: string;
 	numero: number;
 }
+
+export type Cronometrar = {
+	cronometrar: boolean;
+	tipo: string; // 'especial' | 'laps
+	especial: string;
+	posicao: string; // 'inicio' | 'fim'
+}

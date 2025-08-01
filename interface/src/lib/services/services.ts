@@ -1,6 +1,6 @@
 import { page } from '$app/state';
 import { user } from '$lib/stores/user';
-import type { Atleta, Categoria, Prova, Relogio, RFIDCard } from '$lib/types/models';
+import type { Atleta, Categoria, Prova, Relogio, RFIDCard, Cronometrar } from '$lib/types/models';
 
 
 let $user: {
@@ -55,6 +55,31 @@ export async function getCategorias(): Promise<Categoria[]> {
 		console.error('Erro ao carregar as categorias:', error);
 		throw new Error('Erro ao carregar as categorias');
 	}
+}
+
+export async function getCronometrar(): Promise<Cronometrar | undefined> {
+	try {
+		const response = await fetch('/rest/cronometrar', {
+			method: 'GET',
+			headers: {
+				Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
+				'Content-Type': 'application/json'
+			}
+		});
+		if (response.status === 200) {
+			const data = await response.json();
+			// Ensure data is not null or undefined
+			if (data && typeof data === 'object') {
+				return { ...data } as Cronometrar;
+			}
+		} else {
+			throw new Error(`Erro ao carregar o cronometrar: ${response.status} ${response.statusText}`);
+		}
+	} catch (error) {
+		console.error('Erro ao carregar o cronometrar:', error);
+		throw new Error('Erro ao carregar o cronometrar');
+	}
+	return;
 }
 
 export async function getProva(): Promise<Prova | undefined> {
@@ -153,6 +178,29 @@ export async function salvarAtletas(atletas: Atleta[]): Promise<Atleta[]> {
 	}
 }
 
+export async function salvarCronometrar(cronometrar: Cronometrar): Promise<Cronometrar> {
+	try {
+		const response = await fetch('/rest/cronometrar', {
+			method: 'POST',
+			headers: {
+				Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(cronometrar)
+		});
+		if (response.status === 200) {
+			const data = await response.json();
+			cronometrar = { ...data };
+			return cronometrar;
+		} else {
+			throw new Error(`Erro ao cronometrar: ${response.status} ${response.statusText}`);
+		}
+	} catch (error) {
+		console.error('Erro ao cronometrar:', error);
+		throw new Error('Erro ao cronometrar');
+	}
+}
+
 export async function salvarProva(prova: Prova): Promise<Prova> {
 	try {
 		const response = await fetch('/rest/prova', {
@@ -201,6 +249,7 @@ export async function salvarRelogio(relogio: Relogio): Promise<Relogio> {
 }
 
 export async function startRFIDReset(): Promise<void> {
+	console.log('Iniciando o reset do RFID...');
 	try {
 		const response = await fetch('/rest/rfid/start_reset', {
 			method: 'GET',
@@ -237,5 +286,27 @@ export async function stopRFIDReset(): Promise<RFIDCard[]> {
 	} catch (error) {
 		console.error('Erro ao parar o reset do RFID:', error);
 		throw new Error('Erro ao parar o reset do RFID');
+	}
+}
+
+export async function getRFIDCards(): Promise<RFIDCard[]> {
+	try {
+		const response = await fetch('/rest/rfid', {
+			method: 'GET',
+			headers: {
+				Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
+				'Content-Type': 'application/json'
+			}
+		});
+		if (response.status === 200) {
+			const data = await response.json();
+			const rfidData = data || [];
+			return rfidData;
+		} else {
+			throw new Error(`Erro ao carregar os RFIDs: ${response.status} ${response.statusText}`);
+		}
+	} catch (error) {
+		console.error('Erro ao carregar os RFIDs:', error);
+		throw new Error('Erro ao carregar os RFIDs');
 	}
 }

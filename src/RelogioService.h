@@ -30,6 +30,7 @@ public:
     }
 
     static void read(Relogio &settings, JsonObject &root) {
+        Serial.println("READ RELOGIO");
         DateTime now = getRTC().now();
         char buffer[25];
         snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02d",

@@ -85,22 +85,16 @@
 		{
 			title: 'Resetar Chaveiros RFID',
 			icon: Eraser,
-			href: '/config/reset-rfid',
+			href: '/config/reset',
 			feature: true
 		},
 		{
-			title: 'Cronometrar Especial',
+			title: 'Cronometrar',
 			icon: Stopwatch,
 			href: '/config/cronometrar',
 			feature: true
 		},
 		{
-			title: 'Cronometrar LAPS',
-			icon: Stopwatch,
-			href: '/config/cronometrar-laps',
-			feature: true
-		},
-{
 			title: 'Users',
 			icon: Users,
 			href: '/user',

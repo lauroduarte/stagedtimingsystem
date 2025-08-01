@@ -13,7 +13,6 @@
  **/
 
 #include <ESP32SvelteKit.h>
-#include <LightMqttSettingsService.h>
 #include <LightStateService.h>
 #include <PsychicHttpServer.h>
 #include <ProvaService.h>
@@ -28,12 +27,10 @@ PsychicHttpServer server;
 
 ESP32SvelteKit esp32sveltekit(&server, 120);
 
-LightMqttSettingsService lightMqttSettingsService = LightMqttSettingsService(&server,
-                                                                             &esp32sveltekit);
+
 
 LightStateService lightStateService = LightStateService(&server,
-                                                        &esp32sveltekit,
-                                                        &lightMqttSettingsService);
+                                                        &esp32sveltekit);
 
 ProvaService provaService = ProvaService(&server,
                                                         &esp32sveltekit,
@@ -52,9 +49,11 @@ RelogioService relogioService = RelogioService(&server,
                                                         &esp32sveltekit,
                                                         esp32sveltekit.getFS());
 
+DisplayService displayService = DisplayService();
+
 RFIDService rfidService = RFIDService(&server,
                                                         &esp32sveltekit,
-                                                        esp32sveltekit.getSecurityManager());  
+                                                        esp32sveltekit.getSecurityManager(), &displayService);  
                                                 
 
 void setup()
@@ -68,7 +67,6 @@ void setup()
     // load the initial light settings
     lightStateService.begin();
     // start the light service
-    lightMqttSettingsService.begin();
 
     // start the prova service
     provaService.begin();

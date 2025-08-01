@@ -15,11 +15,9 @@
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
  **/
 
-#include <LightMqttSettingsService.h>
 
 #include <EventSocket.h>
 #include <HttpEndpoint.h>
-#include <MqttEndpoint.h>
 #include <EventEndpoint.h>
 #include <WebSocketServer.h>
 #include <ESP32SvelteKit.h>
@@ -85,18 +83,15 @@ class LightStateService : public StatefulService<LightState>
 {
 public:
     LightStateService(PsychicHttpServer *server,
-                      ESP32SvelteKit *sveltekit,
-                      LightMqttSettingsService *lightMqttSettingsService);
+                      ESP32SvelteKit *sveltekit);
 
     void begin();
 
 private:
     HttpEndpoint<LightState> _httpEndpoint;
-    EventEndpoint<LightState> _eventEndpoint;
-    MqttEndpoint<LightState> _mqttEndpoint;
     WebSocketServer<LightState> _webSocketServer;
     PsychicMqttClient *_mqttClient;
-    LightMqttSettingsService *_lightMqttSettingsService;
+
 
     void registerConfig();
     void onConfigUpdated();
