@@ -60,6 +60,7 @@ void setup()
 {
     // start serial and filesystem
     Serial.begin(SERIAL_BAUD_RATE);
+    while(!Serial);
 
     // start ESP32-SvelteKit
     esp32sveltekit.begin();
@@ -82,11 +83,13 @@ void setup()
 
     // start the RFID service
     rfidService.begin();
+
+    esp32sveltekit.addLoopFunction([]() {
+        rfidService.loop();
+    });
 }
 
 void loop()
 {
-    rfidService.loop();
-    // Delete Arduino loop task, as it is not needed in this example
     vTaskDelete(NULL);
 }

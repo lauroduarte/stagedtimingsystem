@@ -12,8 +12,11 @@
 #include <DisplayService.h>
 #include <SPI.h>
 
-#define RST_PIN 22 // ajuste conforme necessário
+#define RST_PIN 4 // ajuste conforme necessário
 #define SS_PIN  5
+#define MOSI_PIN 18
+#define MISO_PIN 19
+#define SCK_PIN 23
 
 #define RFID_SERVICE_START_RESET "/rest/rfid/start_reset"
 #define RFID_SERVICE_STOP_RESET "/rest/rfid/stop_reset"
@@ -60,6 +63,8 @@ public:
     static String readCardData(MFRC522 &rfid, byte startBlock, byte blockCount);
     static bool writeCardData(MFRC522 &rfid, byte startBlock, const String &data);
 
+    void checkHardwareStatus();
+
     void begin();
     void loop();
 
@@ -73,6 +78,7 @@ private:
 
     MFRC522 _rfid;
     bool _resetMode = false;
+    bool _hardwareOk;
     
     int _nextIndex = 1;
     void setupEndpoints();
