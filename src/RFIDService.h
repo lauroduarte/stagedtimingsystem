@@ -28,6 +28,7 @@
 class RFIDState{
     public:
         std::map<String, int> _cardRegistry;
+        int nextIndex = 1;
 
     static void read(RFIDState &state, JsonObject &json) {
         for (const auto &entry : state._cardRegistry) {
@@ -58,7 +59,7 @@ class RFIDService : public StatefulService<RFIDState> {
 public:
     RFIDService(PsychicHttpServer *server, 
                 ESP32SvelteKit *sveltekit,
-                SecurityManager *securityManager, DisplayService *display);
+                SecurityManager *securityManager, DisplayService *display, FS *fs);
     static String uidToString(MFRC522::Uid *uid);
     static String readCardData(MFRC522 &rfid, byte startBlock, byte blockCount);
     static bool writeCardData(MFRC522 &rfid, byte startBlock, const String &data);
@@ -75,12 +76,12 @@ private:
     WebSocketServer<RFIDState> _webSocketServer;
     HttpEndpoint<RFIDState> _httpEndpoint;
     EventEndpoint<RFIDState> _eventEndpoint;
+    FSPersistence<RFIDState> _fsPersistence;
 
     MFRC522 _rfid;
     bool _resetMode = false;
     bool _hardwareOk;
-    
-    int _nextIndex = 1;
+
     void setupEndpoints();
     esp_err_t handleStartReset(PsychicRequest *request);
     esp_err_t handleStopReset(PsychicRequest *request);

@@ -53,7 +53,7 @@ DisplayService displayService = DisplayService();
 
 RFIDService rfidService = RFIDService(&server,
                                                         &esp32sveltekit,
-                                                        esp32sveltekit.getSecurityManager(), &displayService);  
+                                                        esp32sveltekit.getSecurityManager(), &displayService, esp32sveltekit.getFS());  
                                                 
 
 void setup()

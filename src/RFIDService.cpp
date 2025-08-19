@@ -2,7 +2,7 @@
 
 RFIDService::RFIDService(PsychicHttpServer *server,
                          ESP32SvelteKit *sveltekit,
-                         SecurityManager *securityManager, DisplayService *display)
+                         SecurityManager *securityManager, DisplayService *display, FS *fs)
     : _server(server),
       _securityManager(securityManager),
       _rfid(SS_PIN, RST_PIN),
@@ -26,7 +26,8 @@ RFIDService::RFIDService(PsychicHttpServer *server,
           RFID_SERVICE_SOCKET_PATH,
           sveltekit->getSecurityManager(),
           AuthenticationPredicates::IS_AUTHENTICATED),
-      _display() {}
+      _display(),
+      _fsPersistence(RFIDState::read, RFIDState::update, this, sveltekit->getFS(), "/config/rfid.json") {}
 
 void RFIDService::begin()
 {
@@ -40,6 +41,7 @@ void RFIDService::begin()
     _httpEndpoint.begin();
     _eventEndpoint.begin();
     _webSocketServer.begin();
+    _fsPersistence.readFromFS();
 }
 
 void RFIDService::setupEndpoints()
@@ -57,15 +59,20 @@ esp_err_t RFIDService::handleStartReset(PsychicRequest *request)
 {
     Serial.println("Starting RFID reset mode");
     _resetMode = true;
-    _state._cardRegistry.clear();
-    _nextIndex = 1;
+    // Create a new RFIDState instance
+    _state = RFIDState();
+
+    this->update([&](RFIDState& _state) {
+        _state._cardRegistry = std::map<String, int>(); // clear existing registry
+        return StateUpdateResult::CHANGED; // notify StatefulService by returning CHANGED
+    }, "handleStartReset");
 
     PsychicJsonResponse response = PsychicJsonResponse(request, false);
 
     JsonObject root = response.getRoot();
 
     root["status"] = "reset mode started";
-    root["nextIndex"] = _nextIndex;
+    root["nextIndex"] = _state.nextIndex;
 
     return response.send();
 }
@@ -81,12 +88,14 @@ esp_err_t RFIDService::handleStopReset(PsychicRequest *request)
 
     JsonArray array = root[""].to<JsonArray>();
 
-    for (const auto &entry : _state._cardRegistry)
-    {
-        JsonObject obj = array.createNestedObject();
-        obj["uid"] = entry.first;
-        obj["numero"] = entry.second;
-    }
+    this->read([&](RFIDState& state) {
+        for (const auto &entry : state._cardRegistry)
+        {
+            JsonObject obj = array.createNestedObject();
+            obj["uid"] = entry.first;
+            obj["numero"] = entry.second;
+        }
+    });
 
     return response.send();
 }
@@ -172,12 +181,19 @@ void RFIDService::loop()
 
         String uidStr = uidToString(&_rfid.uid);
 
-        if (_state._cardRegistry.find(uidStr) == _state._cardRegistry.end())
-        {
-            clearRFIDData(&_rfid.uid);
-            _state._cardRegistry[uidStr] = _nextIndex++;
-            Serial.printf("Card %s reset and stored as %d\n", uidStr.c_str(), _state._cardRegistry[uidStr]);
-        }
+        this->read([&](RFIDState& state) {
+            if (state._cardRegistry.find(uidStr) != state._cardRegistry.end())
+            {
+                Serial.printf("Card %s already exists with number %d\n", uidStr.c_str(), state._cardRegistry[uidStr]);
+            } else{
+                clearRFIDData(&_rfid.uid);
+                this->update([&](RFIDState& _state) {
+                    _state._cardRegistry[uidStr] = _state.nextIndex++;
+                    Serial.printf("Card %s reset and stored as %d\n", uidStr.c_str(), _state._cardRegistry[uidStr]);
+                    return StateUpdateResult::CHANGED; // notify StatefulService by returning CHANGED
+                }, "loopRFIDService");
+            }
+        });
     }
     else
     {
