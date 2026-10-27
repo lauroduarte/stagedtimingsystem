@@ -1,4 +1,5 @@
 import { page } from '$app/state';
+import { notifications } from '$lib/components/toasts/notifications';
 import { user } from '$lib/stores/user';
 import type { Atleta, Categoria, Prova, Relogio, RFIDCard, Cronometrar } from '$lib/types/models';
 
@@ -300,7 +301,7 @@ export async function getRFIDCards(): Promise<RFIDCard[]> {
 		});
 		if (response.status === 200) {
 			const data = await response.json();
-			const rfidData = data || [];
+			const rfidData = data.cards || [];
 			return rfidData;
 		} else {
 			throw new Error(`Erro ao carregar os RFIDs: ${response.status} ${response.statusText}`);

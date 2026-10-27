@@ -31,25 +31,30 @@ class RFIDState{
         int nextIndex = 1;
 
     static void read(RFIDState &state, JsonObject &json) {
+        JsonArray cards = json["cards"].to<JsonArray>();
         for (const auto &entry : state._cardRegistry) {
-            json[entry.first] = entry.second;
+            JsonObject card = cards.add<JsonObject>();
+            card["uid"] = entry.first;
+            card["numero"] = entry.second;
         }
     }
 
     static StateUpdateResult update(JsonObject &json, RFIDState &state) {
-        if (!json.containsKey("uid") || !json.containsKey("numero")) {
-            return StateUpdateResult::ERROR;
-        }
-
-        String uid = json["uid"].as<String>();
-        int numero = json["numero"];
-
-        if (state._cardRegistry.find(uid) != state._cardRegistry.end()) {
-            state._cardRegistry[uid] = numero;
-            return StateUpdateResult::UNCHANGED;
-        } else {
-            state._cardRegistry[uid] = numero;
+        state._cardRegistry.clear();
+        if(json["cards"].is<JsonArray>())
+        {
+            for(JsonVariant card : json["cards"].as<JsonArray>())
+            {
+                if(card.is<JsonObject>())
+                {
+                    String uid = card["uid"].as<String>();
+                    int numero = card["numero"];
+                    state._cardRegistry[uid] = numero;
+                }
+            }
             return StateUpdateResult::CHANGED;
+        } else {
+            return StateUpdateResult::UNCHANGED;
         }
     }
 

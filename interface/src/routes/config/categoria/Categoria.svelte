@@ -69,8 +69,6 @@
 
 <SettingsCard collapsible={false}>
 	<div class="space-y-6">
-		<h1 class="text-2xl font-bold">Cadastro de categorias</h1>
-
 		{#if categorias.length > 0}
 			<table class="min-w-full bg-white rounded shadow">
 				<thead>

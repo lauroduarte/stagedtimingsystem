@@ -76,8 +76,6 @@
 
 <SettingsCard collapsible={false}>
 	<div class="space-y-6">
-		<h1 class="text-2xl font-bold">Cadastro da Atleta</h1>
-
 		{#if atletas.length > 0}
 			<table class="min-w-full bg-white rounded shadow mb-6">
 				<thead>

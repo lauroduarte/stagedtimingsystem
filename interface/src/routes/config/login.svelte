@@ -11,7 +11,7 @@
 		username: string;
 	};
 
-	let { signIn } = $props();
+	let { signIn } : { signIn: () => void } = $props();
 
 	let username = $state('');
 	let password = $state('');
@@ -69,6 +69,9 @@
 				<InputPassword id="pwd" bind:value={password} />
 
 				<div class="card-actions mt-4 justify-end">
+				<!-- Botão voltar-->
+					<a class="bnt btn-neutral inline-flex items-center" href="/"><span>Voltar</span></a>
+
 					<button
 						class="btn btn-primary inline-flex items-center"
 						onclick={() => {

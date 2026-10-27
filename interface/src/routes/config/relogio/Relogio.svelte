@@ -43,8 +43,6 @@
 
 <SettingsCard collapsible={false}>
 	<div class="space-y-6">
-		<h1 class="text-2xl font-bold">Cadastro da Relogio</h1>
-
 		<div class="bg-white p-6 rounded shadow max-w-xl">
 
 			<label for="data" class="block mb-2 font-medium">Data que vai acontecer</label>

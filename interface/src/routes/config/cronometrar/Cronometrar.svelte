@@ -47,8 +47,6 @@
 
 <SettingsCard collapsible={false}>
 	<div class="space-y-6">
-		<h1 class="text-2xl font-bold">Cadastro da Cronometrar</h1>
-
 		<div class="bg-white p-6 rounded shadow max-w-xl">
 			<label for="nome" class="block mb-2 font-medium">Tipo</label>
 			<select

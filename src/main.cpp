@@ -25,7 +25,7 @@
 
 PsychicHttpServer server;
 
-ESP32SvelteKit esp32sveltekit(&server, 120);
+ESP32SvelteKit esp32sveltekit(&server, 130);
 
 
 
