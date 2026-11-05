@@ -11,8 +11,10 @@
 		getCronometragens,
 		getCronometrar,
 		getProva,
+		getSyncConfigLocal,
 		salvarCronometrar
 	} from '$lib/services/services';
+	import { formatarMsParaHMS, parseHMSParaMs } from '$lib/utils/apuracao';
 
 	type ResumoVoltasPiloto = {
 		uid: string;
@@ -22,6 +24,7 @@
 		horarioLargadaZero: string;
 		voltasConcluidas: number;
 		tempoTotalSegundos: number;
+		tempoTotalMs: number;
 		tempoTotalFormatado: string;
 		melhorVoltaFormatada: string;
 		voltas: {
@@ -129,7 +132,8 @@
 			let horarioLargadaZero = '';
 			let voltasConcluidas = 0;
 			let tempoTotalSegundos = 0;
-			let melhorVoltaSegundos = -1;
+			let tempoTotalMs = 0;
+			let melhorVoltaMs = -1;
 			const voltas: ResumoVoltasPiloto['voltas'] = [];
 
 			const ordenados = [...itensPiloto].sort((a, b) => {
@@ -152,11 +156,19 @@
 					duracao: reg.duracao || '—',
 					status: reg.status || 'OK'
 				});
-				if (reg.fim && typeof reg.duracaoSegundos === 'number' && reg.duracaoSegundos >= 0) {
+				const durMs =
+					typeof reg.duracaoMs === 'number' && reg.duracaoMs >= 0
+						? reg.duracaoMs
+						: (parseHMSParaMs(reg.duracao) ??
+							(typeof reg.duracaoSegundos === 'number' && reg.duracaoSegundos >= 0
+								? reg.duracaoSegundos * 1000
+								: -1));
+				if (reg.fim && durMs >= 0) {
 					voltasConcluidas += 1;
-					tempoTotalSegundos += reg.duracaoSegundos;
-					if (melhorVoltaSegundos < 0 || reg.duracaoSegundos < melhorVoltaSegundos) {
-						melhorVoltaSegundos = reg.duracaoSegundos;
+					tempoTotalMs += durMs;
+					tempoTotalSegundos = Math.floor(tempoTotalMs / 1000);
+					if (melhorVoltaMs < 0 || durMs < melhorVoltaMs) {
+						melhorVoltaMs = durMs;
 					}
 				}
 			}
@@ -169,8 +181,9 @@
 				horarioLargadaZero,
 				voltasConcluidas,
 				tempoTotalSegundos,
-				tempoTotalFormatado: voltasConcluidas > 0 ? formatarSegundos(tempoTotalSegundos) : '—',
-				melhorVoltaFormatada: melhorVoltaSegundos >= 0 ? formatarSegundos(melhorVoltaSegundos) : '—',
+				tempoTotalMs,
+				tempoTotalFormatado: voltasConcluidas > 0 ? formatarMsParaHMS(tempoTotalMs) : '—',
+				melhorVoltaFormatada: melhorVoltaMs >= 0 ? formatarMsParaHMS(melhorVoltaMs) : '—',
 				voltas
 			});
 		}
@@ -179,8 +192,8 @@
 			if (b.voltasConcluidas !== a.voltasConcluidas) {
 				return b.voltasConcluidas - a.voltasConcluidas;
 			}
-			if (a.tempoTotalSegundos !== b.tempoTotalSegundos) {
-				return a.tempoTotalSegundos - b.tempoTotalSegundos;
+			if (a.tempoTotalMs !== b.tempoTotalMs) {
+				return a.tempoTotalMs - b.tempoTotalMs;
 			}
 			return a.numeral - b.numeral;
 		});
@@ -213,12 +226,11 @@
 
 	onMount(async () => {
 		try {
-			const [cronData, provaData, atletasData, cronometragemData] = await Promise.all([
-				getCronometrar().catch(() => undefined),
-				getProva().catch(() => undefined),
-				getAtletas().catch(() => []),
-				getCronometragens().catch(() => [])
-			]);
+			const pkg = await getSyncConfigLocal();
+			const cronometragemData = await getCronometragens().catch(() => []);
+			const cronData = pkg?.estacao;
+			const provaData = pkg?.prova;
+			const atletasData = Array.isArray(pkg?.atletas) ? pkg.atletas : [];
 
 			if (provaData) {
 				prova = {

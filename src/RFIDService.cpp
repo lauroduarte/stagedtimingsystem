@@ -577,7 +577,7 @@ void RFIDService::loop()
 
         if (_buzzer)
         {
-            _buzzer->beepTone(1000, 120);
+            _buzzer->beep(180);
         }
 
         if (cardExists)
@@ -615,7 +615,7 @@ void RFIDService::loop()
             Serial.printf("[RFID-STANDBY] Cartão detectado: %s\n", uidStr.c_str());
             if (_buzzer)
             {
-                _buzzer->beepTone(2000, 60);
+                _buzzer->beep(120);
             }
         }
         _rfid.PICC_HaltA();

@@ -19,13 +19,14 @@ export const MODO_LAPS = 'laps';
 export const CRITERIO_VOLTAS_TEMPO: CriterioVoltas = 'voltas_tempo';
 export const CRITERIO_MELHOR_VOLTA: CriterioVoltas = 'melhor_volta';
 
-export function parseHMSParaSegundos(hms: string | undefined | null): number | null {
+export function parseHMSParaMs(hms: string | undefined | null): number | null {
 	if (!hms || hms.length < 8) return null;
-	const parts = hms.trim().split(':');
-	if (parts.length !== 3) return null;
-	const h = Number(parts[0]);
-	const m = Number(parts[1]);
-	const s = Number(parts[2]);
+	const partes = hms.trim().split(':');
+	if (partes.length !== 3) return null;
+	const h = Number(partes[0]);
+	const m = Number(partes[1]);
+	const [segStr, msRaw] = partes[2].split('.');
+	const s = Number(segStr);
 	if (
 		!Number.isInteger(h) ||
 		!Number.isInteger(m) ||
@@ -39,43 +40,113 @@ export function parseHMSParaSegundos(hms: string | undefined | null): number | n
 	) {
 		return null;
 	}
-	return h * 3600 + m * 60 + s;
+	let ms = 0;
+	if (msRaw !== undefined && msRaw.length > 0) {
+		const digits = msRaw.replace(/\D/g, '').slice(0, 3).padEnd(3, '0');
+		ms = Number(digits);
+		if (!Number.isInteger(ms) || ms < 0 || ms > 999) {
+			ms = 0;
+		}
+	}
+	return (h * 3600 + m * 60 + s) * 1000 + ms;
+}
+
+export function parseHMSParaSegundos(hms: string | undefined | null): number | null {
+	const ms = parseHMSParaMs(hms);
+	return ms === null ? null : Math.floor(ms / 1000);
+}
+
+export function formatarMsParaHMS(totalMs: number): string {
+	if (typeof totalMs !== 'number' || totalMs < 0 || !Number.isFinite(totalMs)) {
+		return '';
+	}
+	const inteiroMs = Math.round(totalMs);
+	const totalSegundos = Math.floor(inteiroMs / 1000);
+	const ms = inteiroMs % 1000;
+	const hours = Math.floor(totalSegundos / 3600);
+	const minutes = Math.floor((totalSegundos % 3600) / 60);
+	const seconds = totalSegundos % 60;
+	const pad2 = (n: number) => String(n).padStart(2, '0');
+	const pad3 = (n: number) => String(n).padStart(3, '0');
+	return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}.${pad3(ms)}`;
 }
 
 export function formatarSegundosParaHMS(totalSegundos: number): string {
 	if (typeof totalSegundos !== 'number' || totalSegundos < 0 || !Number.isFinite(totalSegundos)) {
 		return '';
 	}
-	const inteiro = Math.floor(totalSegundos);
-	const hours = Math.floor(inteiro / 3600);
-	const minutes = Math.floor((inteiro % 3600) / 60);
-	const seconds = inteiro % 60;
-	const pad = (n: number) => String(n).padStart(2, '0');
-	return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+	return formatarMsParaHMS(Math.round(totalSegundos * 1000));
+}
+
+export function formatarGapMs(diffMs: number): string {
+	if (diffMs <= 0 || !Number.isFinite(diffMs)) {
+		return '+00:00:00.000';
+	}
+	return `+${formatarMsParaHMS(diffMs)}`;
 }
 
 export function formatarGapSegundos(diffSegundos: number): string {
 	if (diffSegundos <= 0) {
-		return '+00:00:00';
+		return '+00:00:00.000';
 	}
-	return `+${formatarSegundosParaHMS(diffSegundos)}`;
+	return formatarGapMs(Math.round(diffSegundos * 1000));
 }
 
 export function calcularDuracaoEntreHorarios(
 	inicio: string,
 	fim: string
-): { segundos: number; formatado: string } | null {
-	const secIni = parseHMSParaSegundos(inicio);
-	let secFim = parseHMSParaSegundos(fim);
-	if (secIni === null || secFim === null) return null;
-	if (secFim < secIni) {
-		secFim += 86400;
+): { segundos: number; ms: number; formatado: string } | null {
+	const msIni = parseHMSParaMs(inicio);
+	let msFim = parseHMSParaMs(fim);
+	if (msIni === null || msFim === null) return null;
+	if (msFim < msIni) {
+		msFim += 86400000;
 	}
-	const diff = secFim - secIni;
+	const diffMs = msFim - msIni;
 	return {
-		segundos: diff,
-		formatado: formatarSegundosParaHMS(diff)
+		segundos: Math.floor(diffMs / 1000),
+		ms: diffMs,
+		formatado: formatarMsParaHMS(diffMs)
 	};
+}
+
+function obterDuracaoEtapaMs(et: EtapaApurada): number {
+	if (typeof et.duracaoMs === 'number' && et.duracaoMs >= 0) {
+		return et.duracaoMs;
+	}
+	const parsed = parseHMSParaMs(et.duracao);
+	if (parsed !== null && parsed >= 0) {
+		return parsed;
+	}
+	return typeof et.duracaoSegundos === 'number' && et.duracaoSegundos >= 0
+		? et.duracaoSegundos * 1000
+		: -1;
+}
+
+function obterTempoTotalPilotoMs(p: PilotoApurado): number {
+	if (typeof p.tempoTotalMs === 'number' && p.tempoTotalMs >= 0) {
+		return p.tempoTotalMs;
+	}
+	const parsed = parseHMSParaMs(p.tempoTotal);
+	if (parsed !== null && parsed >= 0) {
+		return parsed;
+	}
+	return typeof p.tempoTotalSegundos === 'number' && p.tempoTotalSegundos >= 0
+		? p.tempoTotalSegundos * 1000
+		: -1;
+}
+
+function obterMelhorVoltaPilotoMs(p: PilotoApurado): number {
+	if (typeof p.melhorVoltaMs === 'number' && p.melhorVoltaMs >= 0) {
+		return p.melhorVoltaMs;
+	}
+	const parsed = parseHMSParaMs(p.melhorVolta);
+	if (parsed !== null && parsed >= 0) {
+		return parsed;
+	}
+	return typeof p.melhorVoltaSegundos === 'number' && p.melhorVoltaSegundos >= 0
+		? p.melhorVoltaSegundos * 1000
+		: -1;
 }
 
 function prioridadeSituacao(situacao: SituacaoPiloto): number {
@@ -100,16 +171,16 @@ function extrairIndiceCodigo(codigo: string, prefixo: string): number {
 function calcularTextoGapVolta(
 	piloto: PilotoApurado,
 	voltasLider: number,
-	tempoTotalLider: number,
-	melhorVoltaLider: number,
+	tempoTotalLiderMs: number,
+	melhorVoltaLiderMs: number,
 	usarMelhorVolta: boolean
 ): string {
 	if (usarMelhorVolta) {
-		return formatarGapSegundos(piloto.melhorVoltaSegundos - melhorVoltaLider);
+		return formatarGapMs(obterMelhorVoltaPilotoMs(piloto) - melhorVoltaLiderMs);
 	}
 	const diffVoltas = voltasLider - piloto.voltasConcluidas;
 	if (diffVoltas <= 0) {
-		return formatarGapSegundos(piloto.tempoTotalSegundos - tempoTotalLider);
+		return formatarGapMs(obterTempoTotalPilotoMs(piloto) - tempoTotalLiderMs);
 	}
 	return `-${diffVoltas} ${diffVoltas === 1 ? 'volta' : 'voltas'}`;
 }
@@ -121,7 +192,14 @@ export function reordenarClassificacaoPorCriterio(
 ): PilotoApurado[] {
 	const copia: PilotoApurado[] = listaOriginal.map((p) => ({
 		...p,
-		etapas: p.etapas ? p.etapas.map((e) => ({ ...e })) : []
+		tempoTotalMs: obterTempoTotalPilotoMs(p),
+		melhorVoltaMs: obterMelhorVoltaPilotoMs(p),
+		etapas: p.etapas
+			? p.etapas.map((e) => ({
+					...e,
+					duracaoMs: obterDuracaoEtapaMs(e)
+				}))
+			: []
 	}));
 
 	if (modoProva === MODO_ESPECIAL) {
@@ -130,14 +208,17 @@ export function reordenarClassificacaoPorCriterio(
 			const prioB = prioridadeSituacao(b.situacao);
 			if (prioA !== prioB) return prioA - prioB;
 
+			const totalA = obterTempoTotalPilotoMs(a);
+			const totalB = obterTempoTotalPilotoMs(b);
+
 			if (a.situacao === 'CLASSIFICADO') {
-				if (a.tempoTotalSegundos !== b.tempoTotalSegundos) {
-					return a.tempoTotalSegundos - b.tempoTotalSegundos;
+				if (totalA !== totalB) {
+					return totalA - totalB;
 				}
 				const len = Math.min(a.etapas.length, b.etapas.length);
 				for (let i = len - 1; i >= 0; i--) {
-					const ta = a.etapas[i].duracaoSegundos;
-					const tb = b.etapas[i].duracaoSegundos;
+					const ta = obterDuracaoEtapaMs(a.etapas[i]);
+					const tb = obterDuracaoEtapaMs(b.etapas[i]);
 					if (ta >= 0 && tb >= 0 && ta !== tb) {
 						return ta - tb;
 					}
@@ -149,12 +230,8 @@ export function reordenarClassificacaoPorCriterio(
 				if (a.etapasConcluidas !== b.etapasConcluidas) {
 					return b.etapasConcluidas - a.etapasConcluidas;
 				}
-				if (
-					a.tempoTotalSegundos >= 0 &&
-					b.tempoTotalSegundos >= 0 &&
-					a.tempoTotalSegundos !== b.tempoTotalSegundos
-				) {
-					return a.tempoTotalSegundos - b.tempoTotalSegundos;
+				if (totalA >= 0 && totalB >= 0 && totalA !== totalB) {
+					return totalA - totalB;
 				}
 				return a.numeral - b.numeral;
 			}
@@ -163,27 +240,28 @@ export function reordenarClassificacaoPorCriterio(
 		});
 
 		let posGeral = 1;
-		let liderGeralSeg = -1;
+		let liderGeralMs = -1;
 		const posPorCat = new Map<number, number>();
-		const liderPorCat = new Map<number, number>();
+		const liderPorCatMs = new Map<number, number>();
 
 		for (const p of copia) {
 			if (p.situacao === 'CLASSIFICADO') {
+				const totalMs = obterTempoTotalPilotoMs(p);
 				p.posicaoGeral = posGeral++;
-				if (liderGeralSeg < 0) {
-					liderGeralSeg = p.tempoTotalSegundos;
+				if (liderGeralMs < 0) {
+					liderGeralMs = totalMs;
 				}
-				p.gapGeral = formatarGapSegundos(p.tempoTotalSegundos - liderGeralSeg);
+				p.gapGeral = formatarGapMs(totalMs - liderGeralMs);
 
 				const catPos = (posPorCat.get(p.categoriaId) ?? 0) + 1;
 				posPorCat.set(p.categoriaId, catPos);
 				p.posicaoCategoria = catPos;
 
-				if (!liderPorCat.has(p.categoriaId)) {
-					liderPorCat.set(p.categoriaId, p.tempoTotalSegundos);
+				if (!liderPorCatMs.has(p.categoriaId)) {
+					liderPorCatMs.set(p.categoriaId, totalMs);
 				}
-				const liderCatSeg = liderPorCat.get(p.categoriaId) ?? p.tempoTotalSegundos;
-				p.gapCategoria = formatarGapSegundos(p.tempoTotalSegundos - liderCatSeg);
+				const liderCatMs = liderPorCatMs.get(p.categoriaId) ?? totalMs;
+				p.gapCategoria = formatarGapMs(totalMs - liderCatMs);
 			} else {
 				p.posicaoGeral = 0;
 				p.posicaoCategoria = 0;
@@ -198,10 +276,11 @@ export function reordenarClassificacaoPorCriterio(
 	// Modo Voltas (laps)
 	const usarMelhorVolta = criterioVoltas === CRITERIO_MELHOR_VOLTA;
 
-	const obterUltimaVoltaSeg = (p: PilotoApurado): number => {
+	const obterUltimaVoltaMs = (p: PilotoApurado): number => {
 		for (let i = p.etapas.length - 1; i >= 0; i--) {
-			if (p.etapas[i].status === 'OK' && p.etapas[i].duracaoSegundos >= 0) {
-				return p.etapas[i].duracaoSegundos;
+			const durMs = obterDuracaoEtapaMs(p.etapas[i]);
+			if (p.etapas[i].status === 'OK' && durMs >= 0) {
+				return durMs;
 			}
 		}
 		return -1;
@@ -213,34 +292,35 @@ export function reordenarClassificacaoPorCriterio(
 		if (prioA !== prioB) return prioA - prioB;
 
 		if (a.situacao === 'CLASSIFICADO') {
+			const melhorA = obterMelhorVoltaPilotoMs(a);
+			const melhorB = obterMelhorVoltaPilotoMs(b);
+			const totalA = obterTempoTotalPilotoMs(a);
+			const totalB = obterTempoTotalPilotoMs(b);
+
 			if (usarMelhorVolta) {
-				if (a.melhorVoltaSegundos !== b.melhorVoltaSegundos) {
-					return a.melhorVoltaSegundos - b.melhorVoltaSegundos;
+				if (melhorA !== melhorB) {
+					return melhorA - melhorB;
 				}
 				if (a.voltasConcluidas !== b.voltasConcluidas) {
 					return b.voltasConcluidas - a.voltasConcluidas;
 				}
-				if (a.tempoTotalSegundos !== b.tempoTotalSegundos) {
-					return a.tempoTotalSegundos - b.tempoTotalSegundos;
+				if (totalA !== totalB) {
+					return totalA - totalB;
 				}
 			} else {
 				if (a.voltasConcluidas !== b.voltasConcluidas) {
 					return b.voltasConcluidas - a.voltasConcluidas;
 				}
-				if (a.tempoTotalSegundos !== b.tempoTotalSegundos) {
-					return a.tempoTotalSegundos - b.tempoTotalSegundos;
+				if (totalA !== totalB) {
+					return totalA - totalB;
 				}
-				const ultA = obterUltimaVoltaSeg(a);
-				const ultB = obterUltimaVoltaSeg(b);
+				const ultA = obterUltimaVoltaMs(a);
+				const ultB = obterUltimaVoltaMs(b);
 				if (ultA >= 0 && ultB >= 0 && ultA !== ultB) {
 					return ultA - ultB;
 				}
-				if (
-					a.melhorVoltaSegundos >= 0 &&
-					b.melhorVoltaSegundos >= 0 &&
-					a.melhorVoltaSegundos !== b.melhorVoltaSegundos
-				) {
-					return a.melhorVoltaSegundos - b.melhorVoltaSegundos;
+				if (melhorA >= 0 && melhorB >= 0 && melhorA !== melhorB) {
+					return melhorA - melhorB;
 				}
 			}
 			return a.numeral - b.numeral;
@@ -251,27 +331,29 @@ export function reordenarClassificacaoPorCriterio(
 
 	let posGeral = 1;
 	let voltasLiderGeral = -1;
-	let tempoLiderGeral = -1;
-	let melhorVoltaLiderGeral = -1;
+	let tempoLiderGeralMs = -1;
+	let melhorVoltaLiderGeralMs = -1;
 
 	const posPorCat = new Map<number, number>();
 	const voltasLiderCat = new Map<number, number>();
-	const tempoLiderCat = new Map<number, number>();
-	const melhorVoltaLiderCat = new Map<number, number>();
+	const tempoLiderCatMs = new Map<number, number>();
+	const melhorVoltaLiderCatMs = new Map<number, number>();
 
 	for (const p of copia) {
 		if (p.situacao === 'CLASSIFICADO') {
+			const totalMs = obterTempoTotalPilotoMs(p);
+			const melhorMs = obterMelhorVoltaPilotoMs(p);
 			p.posicaoGeral = posGeral++;
 			if (voltasLiderGeral < 0) {
 				voltasLiderGeral = p.voltasConcluidas;
-				tempoLiderGeral = p.tempoTotalSegundos;
-				melhorVoltaLiderGeral = p.melhorVoltaSegundos;
+				tempoLiderGeralMs = totalMs;
+				melhorVoltaLiderGeralMs = melhorMs;
 			}
 			p.gapGeral = calcularTextoGapVolta(
 				p,
 				voltasLiderGeral,
-				tempoLiderGeral,
-				melhorVoltaLiderGeral,
+				tempoLiderGeralMs,
+				melhorVoltaLiderGeralMs,
 				usarMelhorVolta
 			);
 
@@ -281,14 +363,14 @@ export function reordenarClassificacaoPorCriterio(
 
 			if (!voltasLiderCat.has(p.categoriaId)) {
 				voltasLiderCat.set(p.categoriaId, p.voltasConcluidas);
-				tempoLiderCat.set(p.categoriaId, p.tempoTotalSegundos);
-				melhorVoltaLiderCat.set(p.categoriaId, p.melhorVoltaSegundos);
+				tempoLiderCatMs.set(p.categoriaId, totalMs);
+				melhorVoltaLiderCatMs.set(p.categoriaId, melhorMs);
 			}
 			p.gapCategoria = calcularTextoGapVolta(
 				p,
 				voltasLiderCat.get(p.categoriaId) ?? p.voltasConcluidas,
-				tempoLiderCat.get(p.categoriaId) ?? p.tempoTotalSegundos,
-				melhorVoltaLiderCat.get(p.categoriaId) ?? p.melhorVoltaSegundos,
+				tempoLiderCatMs.get(p.categoriaId) ?? totalMs,
+				melhorVoltaLiderCatMs.get(p.categoriaId) ?? melhorMs,
 				usarMelhorVolta
 			);
 		} else {
@@ -379,22 +461,26 @@ export function apurarResultadosLocais(params: {
 			const calc = calcularDuracaoEntreHorarios(item.inicio, item.fim);
 			if (calc) {
 				item.duracaoSegundos = calc.segundos;
+				item.duracaoMs = calc.ms;
 				item.duracao = calc.formatado;
 				item.status = 'OK';
 				item.incompleto = false;
 			} else {
 				item.duracaoSegundos = -1;
+				item.duracaoMs = -1;
 				item.duracao = '';
 				item.status = 'invalido';
 				item.incompleto = true;
 			}
 		} else if (!item.inicio && item.fim) {
 			item.duracaoSegundos = -1;
+			item.duracaoMs = -1;
 			item.duracao = '';
 			item.status = 'sem_largada';
 			item.incompleto = true;
 		} else if (item.inicio && !item.fim) {
 			item.duracaoSegundos = -1;
+			item.duracaoMs = -1;
 			item.duracao = '';
 			item.status = 'largada';
 			item.incompleto = false;
@@ -450,8 +536,10 @@ export function apurarResultadosLocais(params: {
 			etapasEsperadas: 0,
 			voltasConcluidas: 0,
 			tempoTotalSegundos: -1,
+			tempoTotalMs: -1,
 			tempoTotal: '',
 			melhorVoltaSegundos: -1,
+			melhorVoltaMs: -1,
 			melhorVolta: '',
 			posicaoGeral: 0,
 			gapGeral: 'DNS',
@@ -482,8 +570,10 @@ export function apurarResultadosLocais(params: {
 				etapasEsperadas: 0,
 				voltasConcluidas: 0,
 				tempoTotalSegundos: -1,
+				tempoTotalMs: -1,
 				tempoTotal: '',
 				melhorVoltaSegundos: -1,
+				melhorVoltaMs: -1,
 				melhorVolta: '',
 				posicaoGeral: 0,
 				gapGeral: 'DNS',
@@ -539,6 +629,7 @@ export function apurarResultadosLocais(params: {
 				fim: '',
 				duracao: '',
 				duracaoSegundos: -1,
+				duracaoMs: -1,
 				status: 'pendente',
 				posicaoEtapa: 0,
 				gapEtapa: ''
@@ -556,6 +647,12 @@ export function apurarResultadosLocais(params: {
 			et.fim = r.fim || '';
 			et.duracao = r.duracao || '';
 			et.duracaoSegundos = typeof r.duracaoSegundos === 'number' ? r.duracaoSegundos : -1;
+			et.duracaoMs =
+				typeof r.duracaoMs === 'number'
+					? r.duracaoMs
+					: et.duracaoSegundos >= 0
+						? et.duracaoSegundos * 1000
+						: -1;
 			et.status = r.status || 'pendente';
 		}
 
@@ -567,15 +664,16 @@ export function apurarResultadosLocais(params: {
 			let temAlgumRegistro = false;
 			let temFalhaOuIncompleto = false;
 			let temLargadaAberta = false;
-			let somaSegundos = 0;
+			let somaMs = 0;
 
 			for (let i = 0; i < etapasExibidas; i++) {
 				const et = p.etapas[i];
 				if (et.status !== 'pendente') temAlgumRegistro = true;
-				if (et.status === 'OK' && et.duracaoSegundos >= 0) {
+				const durMs = obterDuracaoEtapaMs(et);
+				if (et.status === 'OK' && durMs >= 0) {
 					concluidasTotais++;
 					if (i < etapasDisputadas) concluidasDisputadas++;
-					somaSegundos += et.duracaoSegundos;
+					somaMs += durMs;
 				} else if (et.status === 'sem_largada' || et.status === 'invalido') {
 					temFalhaOuIncompleto = true;
 				} else if (et.status === 'largada') {
@@ -588,6 +686,7 @@ export function apurarResultadosLocais(params: {
 			if (!temAlgumRegistro) {
 				p.situacao = 'DNS';
 				p.tempoTotalSegundos = -1;
+				p.tempoTotalMs = -1;
 				p.tempoTotal = '';
 			} else if (
 				maxEstagioComRegistro > 0 &&
@@ -596,12 +695,14 @@ export function apurarResultadosLocais(params: {
 				!temLargadaAberta
 			) {
 				p.situacao = 'CLASSIFICADO';
-				p.tempoTotalSegundos = somaSegundos;
-				p.tempoTotal = formatarSegundosParaHMS(somaSegundos);
+				p.tempoTotalMs = somaMs;
+				p.tempoTotalSegundos = Math.floor(somaMs / 1000);
+				p.tempoTotal = formatarMsParaHMS(somaMs);
 			} else {
 				p.situacao = cronometrandoAtivo && temLargadaAberta && !temFalhaOuIncompleto ? 'EM_CURSO' : 'DNF';
-				p.tempoTotalSegundos = concluidasTotais > 0 ? somaSegundos : -1;
-				p.tempoTotal = concluidasTotais > 0 ? formatarSegundosParaHMS(somaSegundos) : '';
+				p.tempoTotalMs = concluidasTotais > 0 ? somaMs : -1;
+				p.tempoTotalSegundos = concluidasTotais > 0 ? Math.floor(somaMs / 1000) : -1;
+				p.tempoTotal = concluidasTotais > 0 ? formatarMsParaHMS(somaMs) : '';
 			}
 		}
 	} else {
@@ -629,6 +730,7 @@ export function apurarResultadosLocais(params: {
 				fim: '',
 				duracao: '',
 				duracaoSegundos: -1,
+				duracaoMs: -1,
 				status: 'pendente',
 				posicaoEtapa: 0,
 				gapEtapa: ''
@@ -657,6 +759,12 @@ export function apurarResultadosLocais(params: {
 				et.fim = r.fim || '';
 				et.duracao = r.duracao || '';
 				et.duracaoSegundos = typeof r.duracaoSegundos === 'number' ? r.duracaoSegundos : -1;
+				et.duracaoMs =
+					typeof r.duracaoMs === 'number'
+						? r.duracaoMs
+						: et.duracaoSegundos >= 0
+							? et.duracaoSegundos * 1000
+							: -1;
 				et.status = r.status || 'pendente';
 			}
 		}
@@ -665,16 +773,17 @@ export function apurarResultadosLocais(params: {
 
 		pilotos.forEach((p, idx) => {
 			let voltasOk = 0;
-			let somaSegundos = 0;
-			let melhorVoltaSeg = -1;
+			let somaMs = 0;
+			let melhorVoltaMs = -1;
 			let temLargadaAberta = Boolean(p.horarioLargadaInicial);
 
 			for (const et of p.etapas) {
-				if (et.status === 'OK' && et.duracaoSegundos >= 0) {
+				const durMs = obterDuracaoEtapaMs(et);
+				if (et.status === 'OK' && durMs >= 0) {
 					voltasOk++;
-					somaSegundos += et.duracaoSegundos;
-					if (melhorVoltaSeg < 0 || et.duracaoSegundos < melhorVoltaSeg) {
-						melhorVoltaSeg = et.duracaoSegundos;
+					somaMs += durMs;
+					if (melhorVoltaMs < 0 || durMs < melhorVoltaMs) {
+						melhorVoltaMs = durMs;
 					}
 				} else if (et.status === 'largada') {
 					temLargadaAberta = true;
@@ -687,20 +796,26 @@ export function apurarResultadosLocais(params: {
 			if (!temRegistroPorPiloto.has(idx)) {
 				p.situacao = 'DNS';
 				p.tempoTotalSegundos = -1;
+				p.tempoTotalMs = -1;
 				p.tempoTotal = '';
 				p.melhorVoltaSegundos = -1;
+				p.melhorVoltaMs = -1;
 				p.melhorVolta = '';
 			} else if (voltasOk > 0) {
 				p.situacao = 'CLASSIFICADO';
-				p.tempoTotalSegundos = somaSegundos;
-				p.tempoTotal = formatarSegundosParaHMS(somaSegundos);
-				p.melhorVoltaSegundos = melhorVoltaSeg;
-				p.melhorVolta = formatarSegundosParaHMS(melhorVoltaSeg);
+				p.tempoTotalMs = somaMs;
+				p.tempoTotalSegundos = Math.floor(somaMs / 1000);
+				p.tempoTotal = formatarMsParaHMS(somaMs);
+				p.melhorVoltaMs = melhorVoltaMs;
+				p.melhorVoltaSegundos = Math.floor(melhorVoltaMs / 1000);
+				p.melhorVolta = formatarMsParaHMS(melhorVoltaMs);
 			} else {
 				p.situacao = cronometrandoAtivo && temLargadaAberta ? 'EM_CURSO' : 'DNF';
 				p.tempoTotalSegundos = -1;
+				p.tempoTotalMs = -1;
 				p.tempoTotal = '';
 				p.melhorVoltaSegundos = -1;
+				p.melhorVoltaMs = -1;
 				p.melhorVolta = '';
 			}
 		});
@@ -736,25 +851,24 @@ function calcularPosicoesEGapsPorEtapaTS(pilotos: PilotoApurado[], qtdEtapas: nu
 		const concluintes: PilotoApurado[] = [];
 		for (const p of pilotos) {
 			const et: EtapaApurada | undefined = p.etapas[eIdx];
-			if (et && et.status === 'OK' && et.duracaoSegundos >= 0) {
+			if (et && et.status === 'OK' && obterDuracaoEtapaMs(et) >= 0) {
 				concluintes.push(p);
 			}
 		}
 
 		concluintes.sort((a, b) => {
-			const ta = a.etapas[eIdx].duracaoSegundos;
-			const tb = b.etapas[eIdx].duracaoSegundos;
+			const ta = obterDuracaoEtapaMs(a.etapas[eIdx]);
+			const tb = obterDuracaoEtapaMs(b.etapas[eIdx]);
 			if (ta !== tb) return ta - tb;
 			return a.numeral - b.numeral;
 		});
 
 		if (concluintes.length > 0) {
-			const melhor = concluintes[0].etapas[eIdx].duracaoSegundos;
+			const melhorMs = obterDuracaoEtapaMs(concluintes[0].etapas[eIdx]);
 			concluintes.forEach((p, rank) => {
 				p.etapas[eIdx].posicaoEtapa = rank + 1;
-				p.etapas[eIdx].gapEtapa = formatarGapSegundos(
-					p.etapas[eIdx].duracaoSegundos - melhor
-				);
+				const durMs = obterDuracaoEtapaMs(p.etapas[eIdx]);
+				p.etapas[eIdx].gapEtapa = formatarGapMs(durMs - melhorMs);
 			});
 		}
 	}

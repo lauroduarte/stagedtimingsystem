@@ -96,6 +96,14 @@ void setup()
 
     // start ESP32-SvelteKit
     server.config.stack_size = 24576;
+    server.config.lru_purge_enable = true;
+    server.config.recv_wait_timeout = 5;
+    server.config.send_wait_timeout = 5;
+#ifdef CONFIG_LWIP_MAX_SOCKETS
+    server.config.max_open_sockets = (CONFIG_LWIP_MAX_SOCKETS > 3)
+                                         ? ((CONFIG_LWIP_MAX_SOCKETS - 3 > 12) ? 12 : (CONFIG_LWIP_MAX_SOCKETS - 3))
+                                         : 7;
+#endif
     esp32sveltekit.begin();
 
     // start the prova service

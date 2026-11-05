@@ -269,8 +269,8 @@ void CronometrarService::processarPassagemEstagio(const String &uid, int cardNum
         rec.flags = 0;
         if (!inicioEstagio.isEmpty()) rec.flags |= RFIDCard::FLAG_START;
         if (!fimEstagio.isEmpty()) rec.flags |= RFIDCard::FLAG_FINISH;
-        rec.msInicio = 0;
-        rec.msFim = 0;
+        rec.msInicio = RFIDCard::timeStringToMillis(inicioEstagio);
+        rec.msFim = RFIDCard::timeStringToMillis(fimEstagio);
         rec.crc8 = RFIDCard::calcCRC8(reinterpret_cast<const uint8_t*>(&rec), 15);
 
         bool writeRecOk = RFIDService::writeCardBlock(*_rfid, blk, reinterpret_cast<const byte*>(&rec));
@@ -371,7 +371,7 @@ void CronometrarService::processarPassagemEstagio(const String &uid, int cardNum
     {
         if (_buzzer)
         {
-            _buzzer->beepTone(1000, 150); // bipe curto de largada confirmada
+            _buzzer->beep(220); // bipe potente de largada confirmada (frequência de ressonância para ambiente externo)
         }
         if (_display)
         {
@@ -384,7 +384,7 @@ void CronometrarService::processarPassagemEstagio(const String &uid, int cardNum
         {
             if (_buzzer)
             {
-                _buzzer->beepWarning(); // alerta duplo para chegada sem largada
+                _buzzer->beepWarning(); // alerta triplo de alta potência para chegada sem largada
             }
             if (_display)
             {
@@ -395,7 +395,7 @@ void CronometrarService::processarPassagemEstagio(const String &uid, int cardNum
         {
             if (_buzzer)
             {
-                _buzzer->beepTone(1000, 300); // bipe de chegada confirmada
+                _buzzer->beepSuccess(); // confirmação potente de chegada para ambiente externo
             }
             if (_display)
             {
@@ -496,7 +496,7 @@ void CronometrarService::processarPassagemVoltaUnica(const String &uid, int card
         rec.flags = RFIDCard::FLAG_START;
         rec.tsInicio = RFIDCard::timeStringToSeconds(horarioAtual);
         rec.tsFim = 0;
-        rec.msInicio = 0;
+        rec.msInicio = RFIDCard::timeStringToMillis(horarioAtual);
         rec.msFim = 0;
         rec.crc8 = RFIDCard::calcCRC8(reinterpret_cast<const uint8_t*>(&rec), 15);
 
@@ -592,7 +592,7 @@ void CronometrarService::processarPassagemVoltaUnica(const String &uid, int card
                       cardNumber, uid.c_str(), horarioAtual.c_str());
         if (_buzzer)
         {
-            _buzzer->beepTone(1000, 150);
+            _buzzer->beep(220);
         }
         if (_display)
         {
@@ -605,7 +605,7 @@ void CronometrarService::processarPassagemVoltaUnica(const String &uid, int card
                       voltaAtual, voltaAtual, cardNumber, uid.c_str(), ultimoHorario.c_str(), horarioAtual.c_str());
         if (_buzzer)
         {
-            _buzzer->beepTone(1000, 300);
+            _buzzer->beepSuccess();
         }
         if (_display)
         {
@@ -702,7 +702,7 @@ void CronometrarService::processarPassagemVoltaDuasEstacoes(const String &uid, i
             rec.flags = RFIDCard::FLAG_START;
             rec.tsInicio = RFIDCard::timeStringToSeconds(horarioAtual);
             rec.tsFim = 0;
-            rec.msInicio = 0;
+            rec.msInicio = RFIDCard::timeStringToMillis(horarioAtual);
             rec.msFim = 0;
             rec.crc8 = RFIDCard::calcCRC8(reinterpret_cast<const uint8_t*>(&rec), 15);
 
@@ -789,7 +789,7 @@ void CronometrarService::processarPassagemVoltaDuasEstacoes(const String &uid, i
                       novaVolta, novaVolta, cardNumber, uid.c_str(), horarioAtual.c_str());
         if (_buzzer)
         {
-            _buzzer->beepTone(1000, 150);
+            _buzzer->beep(220);
         }
         if (_display)
         {
@@ -912,8 +912,8 @@ void CronometrarService::processarPassagemVoltaDuasEstacoes(const String &uid, i
         rec.flags = RFIDCard::FLAG_COMPLETE;
         rec.tsInicio = RFIDCard::timeStringToSeconds(inicioVolta);
         rec.tsFim = RFIDCard::timeStringToSeconds(horarioAtual);
-        rec.msInicio = 0;
-        rec.msFim = 0;
+        rec.msInicio = RFIDCard::timeStringToMillis(inicioVolta);
+        rec.msFim = RFIDCard::timeStringToMillis(horarioAtual);
         rec.crc8 = RFIDCard::calcCRC8(reinterpret_cast<const uint8_t*>(&rec), 15);
 
         writeOk = RFIDService::writeCardBlock(*_rfid, blk, reinterpret_cast<const byte*>(&rec));
@@ -993,7 +993,7 @@ void CronometrarService::processarPassagemVoltaDuasEstacoes(const String &uid, i
                       voltaAtual, voltaAtual, cardNumber, uid.c_str(), inicioVolta.c_str(), horarioAtual.c_str());
         if (_buzzer)
         {
-            _buzzer->beepTone(1000, 300);
+            _buzzer->beepSuccess();
         }
         if (_display)
         {
@@ -1041,10 +1041,11 @@ void CronometrarService::loop()
     }
 
     // P0-05: Captura imediata do timestamp no exato milissegundo de detec�o f�sica do cart�o
-    DateTime detectNow = Relogio::getNow();
-    char bufferHorario[10];
-    snprintf(bufferHorario, sizeof(bufferHorario), "%02d:%02d:%02d",
-             detectNow.hour(), detectNow.minute(), detectNow.second());
+    uint16_t detectMs = 0;
+    DateTime detectNow = Relogio::getNowMs(detectMs);
+    char bufferHorario[16];
+    snprintf(bufferHorario, sizeof(bufferHorario), "%02d:%02d:%02d.%03u",
+             detectNow.hour(), detectNow.minute(), detectNow.second(), static_cast<unsigned int>(detectMs));
     String horarioDetectado(bufferHorario);
 
     // P1-03: Snapshot thread-safe do estado para evitar data races com o httpd

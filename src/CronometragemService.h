@@ -149,23 +149,47 @@ inline bool operator!=(const std::string& s, const CronoStatusField& f) { return
 
 struct cronometragem_t {
     int32_t duracaoSegundos = -1;
+    int32_t duracaoMs = -1;
     int16_t numeral = 0;
     int16_t volta = 0;                      // 0 para estágios ou largada inicial (L0), 1..N para voltas
     FixedString<12> uid;
     FixedString<6> especial;                // "E1".."E10" no modo especial, ou "L0", "L1", "L2"... no modo laps
-    FixedString<9> inicio;
-    FixedString<9> fim;
+    FixedString<13> inicio;                 // "HH:MM:SS.mmm"
+    FixedString<13> fim;                    // "HH:MM:SS.mmm"
     CronoTipoField tipo = "especial";       // "especial" | "laps"
     CronoModoVoltasField modoVoltas = "unica"; // "unica" | "duas" (quando tipo == "laps")
     CronoStatusField status = "OK";         // "largada" | "OK" | "sem_largada" | "invalido"
     bool incompleto = false;
 
     std::string duracao() const {
+        if (duracaoMs >= 0) {
+            return formatDurationMs(duracaoMs);
+        }
         return formatDuration(duracaoSegundos);
     }
 
     std::string getDuracao() const {
-        return formatDuration(duracaoSegundos);
+        return duracao();
+    }
+
+    static std::string formatDurationMs(int32_t totalMs)
+    {
+        if (totalMs < 0)
+        {
+            return "";
+        }
+        int32_t totalSeconds = totalMs / 1000;
+        int32_t ms = totalMs % 1000;
+        int32_t hours = totalSeconds / 3600;
+        int32_t minutes = (totalSeconds % 3600) / 60;
+        int32_t seconds = totalSeconds % 60;
+        char buf[20];
+        std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%03d",
+                      static_cast<int>(hours),
+                      static_cast<int>(minutes),
+                      static_cast<int>(seconds),
+                      static_cast<int>(ms));
+        return std::string(buf);
     }
 
     static std::string formatDuration(int32_t totalSeconds)
@@ -174,16 +198,11 @@ struct cronometragem_t {
         {
             return "";
         }
-        int32_t hours = totalSeconds / 3600;
-        int32_t minutes = (totalSeconds % 3600) / 60;
-        int32_t seconds = totalSeconds % 60;
-        char buf[16];
-        std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d", static_cast<int>(hours), static_cast<int>(minutes), static_cast<int>(seconds));
-        return std::string(buf);
+        return formatDurationMs(totalSeconds * 1000);
     }
 };
 
-static_assert(sizeof(cronometragem_t) <= 48, "cronometragem_t muito grande");
+static_assert(sizeof(cronometragem_t) <= 64, "cronometragem_t muito grande");
 
 struct conflito_sync_t {
     FixedString<12> uid;
@@ -217,7 +236,7 @@ class Cronometragem
 public:
     std::deque<cronometragem_t> cronometragens;
 
-    static bool parseTimeSeconds(const char *hms, int32_t &outSeconds)
+    static bool parseTimeMs(const char *hms, int32_t &outTotalMs)
     {
         if (!hms || std::strlen(hms) < 8)
         {
@@ -232,7 +251,41 @@ public:
         {
             return false;
         }
-        outSeconds = static_cast<int32_t>(h) * 3600 + static_cast<int32_t>(m) * 60 + static_cast<int32_t>(s);
+        int ms = 0;
+        const char *dot = std::strchr(hms, '.');
+        if (dot != nullptr)
+        {
+            const char *p = dot + 1;
+            int digits = 0;
+            while (*p >= '0' && *p <= '9' && digits < 3)
+            {
+                ms = ms * 10 + (*p - '0');
+                p++;
+                digits++;
+            }
+            while (digits > 0 && digits < 3)
+            {
+                ms *= 10;
+                digits++;
+            }
+        }
+        outTotalMs = (static_cast<int32_t>(h) * 3600 + static_cast<int32_t>(m) * 60 + static_cast<int32_t>(s)) * 1000 + ms;
+        return true;
+    }
+
+    static bool parseTimeMs(const std::string &hms, int32_t &outTotalMs)
+    {
+        return parseTimeMs(hms.c_str(), outTotalMs);
+    }
+
+    static bool parseTimeSeconds(const char *hms, int32_t &outSeconds)
+    {
+        int32_t totalMs = 0;
+        if (!parseTimeMs(hms, totalMs))
+        {
+            return false;
+        }
+        outSeconds = totalMs / 1000;
         return true;
     }
 
@@ -241,27 +294,49 @@ public:
         return parseTimeSeconds(hms.c_str(), outSeconds);
     }
 
+    static std::string formatDurationMs(int32_t totalMs)
+    {
+        return cronometragem_t::formatDurationMs(totalMs);
+    }
+
     static std::string formatDuration(int32_t totalSeconds)
     {
         return cronometragem_t::formatDuration(totalSeconds);
     }
 
-    static bool calcularDuracao(const char *inicio, const char *fim, int32_t &outSegundos, std::string &outFormatado)
+    static bool calcularDuracaoMs(const char *inicio, const char *fim, int32_t &outMs, std::string &outFormatado)
     {
-        int32_t secInicio = 0;
-        int32_t secFim = 0;
-        if (!parseTimeSeconds(inicio, secInicio) || !parseTimeSeconds(fim, secFim))
+        int32_t msInicio = 0;
+        int32_t msFim = 0;
+        if (!parseTimeMs(inicio, msInicio) || !parseTimeMs(fim, msFim))
         {
-            outSegundos = -1;
+            outMs = -1;
             outFormatado = "";
             return false;
         }
-        if (secFim < secInicio)
+        if (msFim < msInicio)
         {
-            secFim += 86400; // Virada de meia-noite
+            msFim += 86400000; // Virada de meia-noite (24h em ms)
         }
-        outSegundos = secFim - secInicio;
-        outFormatado = formatDuration(outSegundos);
+        outMs = msFim - msInicio;
+        outFormatado = formatDurationMs(outMs);
+        return true;
+    }
+
+    static bool calcularDuracaoMs(const std::string &inicio, const std::string &fim, int32_t &outMs, std::string &outFormatado)
+    {
+        return calcularDuracaoMs(inicio.c_str(), fim.c_str(), outMs, outFormatado);
+    }
+
+    static bool calcularDuracao(const char *inicio, const char *fim, int32_t &outSegundos, std::string &outFormatado)
+    {
+        int32_t ms = -1;
+        if (!calcularDuracaoMs(inicio, fim, ms, outFormatado))
+        {
+            outSegundos = -1;
+            return false;
+        }
+        outSegundos = ms / 1000;
         return true;
     }
 
@@ -287,16 +362,18 @@ public:
 
         if (!c.inicio.empty() && !c.fim.empty())
         {
-            int32_t seg = -1;
+            int32_t ms = -1;
             std::string fmt;
-            if (calcularDuracao(c.inicio.c_str(), c.fim.c_str(), seg, fmt))
+            if (calcularDuracaoMs(c.inicio.c_str(), c.fim.c_str(), ms, fmt))
             {
-                c.duracaoSegundos = seg;
+                c.duracaoMs = ms;
+                c.duracaoSegundos = ms / 1000;
                 c.status = "OK";
                 c.incompleto = false;
             }
             else
             {
+                c.duracaoMs = -1;
                 c.duracaoSegundos = -1;
                 c.status = "invalido";
                 c.incompleto = true;
@@ -304,12 +381,14 @@ public:
         }
         else if (c.inicio.empty() && !c.fim.empty())
         {
+            c.duracaoMs = -1;
             c.duracaoSegundos = -1;
             c.status = "sem_largada";
             c.incompleto = true;
         }
         else if (!c.inicio.empty() && c.fim.empty())
         {
+            c.duracaoMs = -1;
             c.duracaoSegundos = -1;
             c.status = "largada";
             c.incompleto = false;
@@ -383,8 +462,8 @@ public:
     {
         return std::snprintf(buf, bufSize,
             appendNewline
-                ? "{\"uid\":\"%s\",\"numeral\":%d,\"tipo\":\"%s\",\"modoVoltas\":\"%s\",\"especial\":\"%s\",\"volta\":%d,\"inicio\":\"%s\",\"fim\":\"%s\",\"duracao\":\"%s\",\"duracaoSegundos\":%ld,\"status\":\"%s\",\"incompleto\":%s}\n"
-                : "{\"uid\":\"%s\",\"numeral\":%d,\"tipo\":\"%s\",\"modoVoltas\":\"%s\",\"especial\":\"%s\",\"volta\":%d,\"inicio\":\"%s\",\"fim\":\"%s\",\"duracao\":\"%s\",\"duracaoSegundos\":%ld,\"status\":\"%s\",\"incompleto\":%s}",
+                ? "{\"uid\":\"%s\",\"numeral\":%d,\"tipo\":\"%s\",\"modoVoltas\":\"%s\",\"especial\":\"%s\",\"volta\":%d,\"inicio\":\"%s\",\"fim\":\"%s\",\"duracao\":\"%s\",\"duracaoSegundos\":%ld,\"duracaoMs\":%ld,\"status\":\"%s\",\"incompleto\":%s}\n"
+                : "{\"uid\":\"%s\",\"numeral\":%d,\"tipo\":\"%s\",\"modoVoltas\":\"%s\",\"especial\":\"%s\",\"volta\":%d,\"inicio\":\"%s\",\"fim\":\"%s\",\"duracao\":\"%s\",\"duracaoSegundos\":%ld,\"duracaoMs\":%ld,\"status\":\"%s\",\"incompleto\":%s}",
             reg.uid.c_str(),
             static_cast<int>(reg.numeral),
             reg.tipo.c_str(),
@@ -395,13 +474,14 @@ public:
             reg.fim.c_str(),
             reg.duracao().c_str(),
             static_cast<long>(reg.duracaoSegundos),
+            static_cast<long>(reg.duracaoMs),
             reg.status.c_str(),
             reg.incompleto ? "true" : "false");
     }
 
     static void serializarItemToStream(const cronometragem_t &reg, Print &out)
     {
-        char buf[256];
+        char buf[320];
         int len = formatItemJson(reg, buf, sizeof(buf), false);
         if (len > 0 && static_cast<size_t>(len) < sizeof(buf))
         {
@@ -438,6 +518,7 @@ public:
         cronometragemObj["fim"] = cronometragem.fim.c_str();
         cronometragemObj["duracao"] = cronometragem.duracao();
         cronometragemObj["duracaoSegundos"] = cronometragem.duracaoSegundos;
+        cronometragemObj["duracaoMs"] = cronometragem.duracaoMs;
         cronometragemObj["status"] = cronometragem.status.c_str();
         cronometragemObj["incompleto"] = cronometragem.incompleto;
     }

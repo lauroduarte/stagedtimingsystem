@@ -155,12 +155,18 @@ void SyncService::invalidarCacheApuracao()
         xSemaphoreTake(_cacheMutex, portMAX_DELAY);
         _cacheApuracaoValido = false;
         _versaoApuracao++;
+        _cacheRelatorio = relatorio_apuracao_t{};
+        _cacheCategorias.clear();
+        _cacheCategorias.shrink_to_fit();
         xSemaphoreGive(_cacheMutex);
     }
     else
     {
         _cacheApuracaoValido = false;
         _versaoApuracao++;
+        _cacheRelatorio = relatorio_apuracao_t{};
+        _cacheCategorias.clear();
+        _cacheCategorias.shrink_to_fit();
     }
 }
 
@@ -280,45 +286,101 @@ esp_err_t SyncService::handleGetStatus(PsychicRequest *request)
 
 esp_err_t SyncService::handleGetConfig(PsychicRequest *request)
 {
-    PsychicJsonResponse response = PsychicJsonResponse(request, false);
-    JsonObject root = response.getRoot();
+    constexpr size_t STREAM_BUF_SIZE = 2048;
+    uint8_t *buffer = static_cast<uint8_t *>(malloc(STREAM_BUF_SIZE));
+    if (!buffer)
+    {
+        return request->reply(500, "application/json", "{\"status\":\"erro\",\"mensagem\":\"Sem memoria para exportar configuracao.\"}");
+    }
 
-    root["versao"] = PROTOCOL_VERSION;
+    PsychicResponse response(request);
+    response.setContentType(JSON_MIMETYPE);
+    response.sendHeaders();
 
-    DateTime now = Relogio::getNow();
-    JsonObject relogioObj = root["relogio"].to<JsonObject>();
-    relogioObj["datetime"] = Relogio::formatDateTime(now);
-    relogioObj["unixtime"] = now.unixtime();
+    ChunkPrinter dest(&response, buffer, STREAM_BUF_SIZE);
+
+    char headerBuf[64];
+    std::snprintf(headerBuf, sizeof(headerBuf), "{\"versao\":%d", PROTOCOL_VERSION);
+    dest.print(headerBuf);
+
+    {
+        uint16_t nowMs = 0;
+        DateTime now = Relogio::getNowMs(nowMs);
+        JsonDocument doc;
+        JsonObject relogioObj = doc.to<JsonObject>();
+        relogioObj["datetime"] = Relogio::formatDateTime(now);
+        relogioObj["datetimeMs"] = Relogio::formatDateTimeMs(now, nowMs);
+        relogioObj["unixtime"] = now.unixtime();
+        relogioObj["ms"] = nowMs;
+        dest.print(",\"relogio\":");
+        serializeJson(doc, dest);
+    }
 
     if (_provaService)
     {
-        JsonObject provaObj = root["prova"].to<JsonObject>();
+        JsonDocument doc;
+        JsonObject provaObj = doc.to<JsonObject>();
         _provaService->read(provaObj, Prova::read);
+        dest.print(",\"prova\":");
+        serializeJson(doc, dest);
     }
 
     if (_categoriaService)
     {
-        _categoriaService->read(root, Categoria::read);
+        JsonDocument doc;
+        JsonObject catRoot = doc.to<JsonObject>();
+        _categoriaService->read(catRoot, Categoria::read);
+        dest.print(",\"categorias\":");
+        if (catRoot["categorias"].is<JsonArray>())
+        {
+            serializeJson(catRoot["categorias"], dest);
+        }
+        else
+        {
+            dest.print("[]");
+        }
     }
 
     if (_atletaService)
     {
-        _atletaService->read(root, Atleta::read);
+        JsonDocument doc;
+        JsonObject atlRoot = doc.to<JsonObject>();
+        _atletaService->read(atlRoot, Atleta::read);
+        dest.print(",\"atletas\":");
+        if (atlRoot["atletas"].is<JsonArray>())
+        {
+            serializeJson(atlRoot["atletas"], dest);
+        }
+        else
+        {
+            dest.print("[]");
+        }
     }
 
     if (_rfidService)
     {
-        JsonObject rfidObj = root["rfid"].to<JsonObject>();
+        JsonDocument doc;
+        JsonObject rfidObj = doc.to<JsonObject>();
         _rfidService->read(rfidObj, RFIDState::read);
+        dest.print(",\"rfid\":");
+        serializeJson(doc, dest);
     }
 
     if (_cronometrarService)
     {
-        JsonObject cronObj = root["cronometrar"].to<JsonObject>();
+        JsonDocument doc;
+        JsonObject cronObj = doc.to<JsonObject>();
         _cronometrarService->read(cronObj, Cronometrar::read);
+        dest.print(",\"cronometrar\":");
+        serializeJson(doc, dest);
     }
 
-    return response.send();
+    dest.write('}');
+    dest.flush();
+
+    esp_err_t err = response.finishChunking();
+    free(buffer);
+    return err;
 }
 
 esp_err_t SyncService::handlePostConfig(PsychicRequest *request, JsonVariant &json)
@@ -468,17 +530,26 @@ esp_err_t SyncService::handlePostConfig(PsychicRequest *request, JsonVariant &js
     bool ajustarRelogio = root["ajustarRelogio"].is<bool>() ? root["ajustarRelogio"].as<bool>() : true;
     std::string datetimeStr = "";
     int32_t offsetSeconds = 0;
+    int32_t offsetMs = 0;
 
     if (root["relogio"].is<JsonObject>())
     {
         JsonObject relObj = root["relogio"].as<JsonObject>();
-        if (relObj["datetime"].is<const char*>())
+        if (relObj["datetimeMs"].is<const char*>())
+        {
+            datetimeStr = relObj["datetimeMs"].as<std::string>();
+        }
+        else if (relObj["datetime"].is<const char*>())
         {
             datetimeStr = relObj["datetime"].as<std::string>();
         }
         if (relObj["offsetSeconds"].is<int>())
         {
             offsetSeconds = relObj["offsetSeconds"].as<int>();
+        }
+        if (relObj["offsetMs"].is<int>())
+        {
+            offsetMs = relObj["offsetMs"].as<int>();
         }
     }
     else if (root["datetime"].is<const char*>())
@@ -489,10 +560,14 @@ esp_err_t SyncService::handlePostConfig(PsychicRequest *request, JsonVariant &js
     {
         offsetSeconds = root["offsetSeconds"].as<int>();
     }
+    if (root["offsetMs"].is<int>())
+    {
+        offsetMs = root["offsetMs"].as<int>();
+    }
 
     if (ajustarRelogio && !datetimeStr.empty())
     {
-        if (Relogio::applyDateTimeString(datetimeStr, offsetSeconds))
+        if (Relogio::applyDateTimeString(datetimeStr, offsetSeconds, offsetMs))
         {
             relogioAjustado = true;
             if (_relogioService)

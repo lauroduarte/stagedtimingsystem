@@ -9,6 +9,7 @@
 		getCronometragens,
 		getProva,
 		getRFIDCards,
+		getSyncConfigLocal,
 		getSyncResultadosLocal,
 		resetarDadosEstacao,
 		startRFIDReset,
@@ -138,18 +139,13 @@
 	async function recarregarTudo() {
 		carregando = true;
 		try {
-			const [provaData, categoriasData, atletasData, cardsData, cronoData] = await Promise.all([
-				getProva().catch(() => undefined),
-				getCategorias().catch(() => []),
-				getAtletas().catch(() => []),
-				getRFIDCards().catch(() => []),
-				getCronometragens().catch(() => [])
-			]);
+			const pkg = await getSyncConfigLocal();
+			const cronoData = await getCronometragens().catch(() => []);
 
-			prova = provaData;
-			categorias = Array.isArray(categoriasData) ? categoriasData : [];
-			atletas = Array.isArray(atletasData) ? atletasData : [];
-			rfidCards = Array.isArray(cardsData) ? cardsData : [];
+			prova = pkg?.prova;
+			categorias = Array.isArray(pkg?.categorias) ? pkg.categorias : [];
+			atletas = Array.isArray(pkg?.atletas) ? pkg.atletas : [];
+			rfidCards = Array.isArray(pkg?.rfidCards) ? pkg.rfidCards : [];
 			cronometragens = Array.isArray(cronoData) ? cronoData : [];
 
 			if (rfidCards.length > 0 && !ultimoChaveiro) {

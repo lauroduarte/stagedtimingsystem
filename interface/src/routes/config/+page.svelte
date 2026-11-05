@@ -9,7 +9,8 @@
 		getCronometrar,
 		getProva,
 		getRelogio,
-		getRFIDCards
+		getRFIDCards,
+		getSyncConfigLocal
 	} from '$lib/services/services';
 	import Refresh from '~icons/tabler/refresh';
 	import Flag from '~icons/tabler/flag';
@@ -60,39 +61,90 @@
 		}
 
 		try {
-			const [provaData, categoriasData, atletasData, relogioData, cronometrarData, cardsData] =
-				await Promise.all([
-					getProva().catch(() => undefined),
-					getCategorias().catch(() => []),
-					getAtletas().catch(() => []),
-					getRelogio().catch(() => undefined),
-					getCronometrar().catch(() => undefined),
-					getRFIDCards().catch(() => [])
-				]);
+			const pkg = await getSyncConfigLocal();
 
-			if (provaData) {
+			if (pkg?.prova) {
 				provaAtual = {
-					nome: provaData.nome || '',
-					local: provaData.local || '',
-					data: provaData.data || '',
-					tipo: provaData.tipo || 'especial',
-					modoVoltas: provaData.modoVoltas === 'duas' ? 'duas' : 'unica',
-					criterioVoltas: provaData.criterioVoltas === 'melhor_volta' ? 'melhor_volta' : 'voltas_tempo',
-					totalEstagios: provaData.totalEstagios || 5
+					nome: pkg.prova.nome || '',
+					local: pkg.prova.local || '',
+					data: pkg.prova.data || '',
+					tipo: pkg.prova.tipo || 'especial',
+					modoVoltas: pkg.prova.modoVoltas === 'duas' ? 'duas' : 'unica',
+					criterioVoltas:
+						pkg.prova.criterioVoltas === 'melhor_volta' ? 'melhor_volta' : 'voltas_tempo',
+					totalEstagios: pkg.prova.totalEstagios || 5
 				};
 			}
 
-			categorias = Array.isArray(categoriasData) ? categoriasData : [];
-			atletas = Array.isArray(atletasData) ? atletasData : [];
-			if (relogioData) {
-				relogio = { datetime: relogioData.datetime || '' };
+			categorias = Array.isArray(pkg?.categorias) ? pkg.categorias : [];
+			atletas = Array.isArray(pkg?.atletas) ? pkg.atletas : [];
+			if (pkg?.relogio) {
+				relogio = { datetime: pkg.relogio.datetime || '' };
 			}
-			if (cronometrarData) {
-				cronometrar = { ...cronometrarData };
+			if (pkg?.estacao) {
+				cronometrar = { ...pkg.estacao };
 			}
-			rfidCards = Array.isArray(cardsData) ? cardsData : [];
-		} catch (err: any) {
-			erroCarregamento = err?.message || 'Falha ao conectar com os serviços da estação.';
+			rfidCards = Array.isArray(pkg?.rfidCards) ? pkg.rfidCards : [];
+		} catch {
+			// Fallback sequencial caso o endpoint consolidado falhe temporariamente
+			const falhas: string[] = [];
+			try {
+				const provaData = await getProva();
+				if (provaData) {
+					provaAtual = {
+						nome: provaData.nome || '',
+						local: provaData.local || '',
+						data: provaData.data || '',
+						tipo: provaData.tipo || 'especial',
+						modoVoltas: provaData.modoVoltas === 'duas' ? 'duas' : 'unica',
+						criterioVoltas:
+							provaData.criterioVoltas === 'melhor_volta' ? 'melhor_volta' : 'voltas_tempo',
+						totalEstagios: provaData.totalEstagios || 5
+					};
+				}
+			} catch {
+				falhas.push('prova');
+			}
+
+			try {
+				categorias = await getCategorias();
+			} catch {
+				falhas.push('categorias');
+			}
+
+			try {
+				atletas = await getAtletas();
+			} catch {
+				falhas.push('atletas');
+			}
+
+			try {
+				const relogioData = await getRelogio();
+				if (relogioData) {
+					relogio = { datetime: relogioData.datetime || '' };
+				}
+			} catch {
+				falhas.push('relógio');
+			}
+
+			try {
+				const cronometrarData = await getCronometrar();
+				if (cronometrarData) {
+					cronometrar = { ...cronometrarData };
+				}
+			} catch {
+				falhas.push('cronometragem');
+			}
+
+			try {
+				rfidCards = await getRFIDCards();
+			} catch {
+				falhas.push('chaveiros RFID');
+			}
+
+			if (falhas.length > 0) {
+				erroCarregamento = `Alguns dados não puderam ser carregados (${falhas.join(', ')}). Clique em Atualizar para tentar novamente.`;
+			}
 		} finally {
 			carregando = false;
 		}

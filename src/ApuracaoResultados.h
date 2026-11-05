@@ -20,17 +20,18 @@
 
 struct etapa_apurada_t {
     int32_t duracaoSegundos = -1;
+    int32_t duracaoMs = -1;
     int16_t indice = 0;                  // 1..N
     int16_t posicaoEtapa = 0;
     FixedString<6> codigo;               // "E1".."E10" ou "L1".."LN"
-    FixedString<9> inicio;
-    FixedString<9> fim;
-    FixedString<9> duracao;
+    FixedString<13> inicio;              // "HH:MM:SS.mmm"
+    FixedString<13> fim;                 // "HH:MM:SS.mmm"
+    FixedString<13> duracao;             // "HH:MM:SS.mmm"
     FixedString<12> status = "pendente"; // "OK" | "largada" | "sem_largada" | "invalido" | "pendente"
-    FixedString<10> gapEtapa;
+    FixedString<15> gapEtapa;            // "+HH:MM:SS.mmm"
 };
 
-static_assert(sizeof(etapa_apurada_t) <= 64, "etapa_apurada_t muito grande");
+static_assert(sizeof(etapa_apurada_t) <= 88, "etapa_apurada_t muito grande");
 
 struct piloto_apurado_t {
     int numeral = 0;
@@ -46,19 +47,22 @@ struct piloto_apurado_t {
     int voltasConcluidas = 0;
 
     int32_t tempoTotalSegundos = -1;
-    FixedString<9> tempoTotal;
+    int32_t tempoTotalMs = -1;
+    FixedString<13> tempoTotal;
 
     int32_t melhorVoltaSegundos = -1;
-    FixedString<9> melhorVolta;
+    int32_t melhorVoltaMs = -1;
+    FixedString<13> melhorVolta;
     int32_t ultimaEtapaSegundos = -1;
+    int32_t ultimaEtapaMs = -1;
 
     int posicaoGeral = 0;
-    FixedString<10> gapGeral;
+    FixedString<15> gapGeral;
 
     int posicaoCategoria = 0;
-    FixedString<10> gapCategoria;
+    FixedString<15> gapCategoria;
 
-    FixedString<9> horarioLargadaInicial; // Para L0 no modo voltas de estação única
+    FixedString<13> horarioLargadaInicial; // Para L0 no modo voltas de estação única
     std::vector<etapa_apurada_t> etapas;
 };
 
@@ -87,13 +91,22 @@ public:
     static constexpr const char *SITUACAO_DNF = "DNF";
     static constexpr const char *SITUACAO_DNS = "DNS";
 
+    static std::string formatGapMs(int32_t diffMs)
+    {
+        if (diffMs <= 0)
+        {
+            return "+00:00:00.000";
+        }
+        return "+" + Cronometragem::formatDurationMs(diffMs);
+    }
+
     static std::string formatGapSeconds(int32_t diffSeconds)
     {
         if (diffSeconds <= 0)
         {
-            return "+00:00:00";
+            return "+00:00:00.000";
         }
-        return "+" + Cronometragem::formatDuration(diffSeconds);
+        return formatGapMs(diffSeconds * 1000);
     }
 
     static int prioridadeSituacao(const std::string &situacao)
@@ -406,8 +419,10 @@ public:
             pObj["etapasEsperadas"] = p.etapasEsperadas;
             pObj["voltasConcluidas"] = p.voltasConcluidas;
             pObj["tempoTotalSegundos"] = p.tempoTotalSegundos;
+            pObj["tempoTotalMs"] = p.tempoTotalMs;
             pObj["tempoTotal"] = p.tempoTotal;
             pObj["melhorVoltaSegundos"] = p.melhorVoltaSegundos;
+            pObj["melhorVoltaMs"] = p.melhorVoltaMs;
             pObj["melhorVolta"] = p.melhorVolta;
             pObj["posicaoGeral"] = p.posicaoGeral;
             pObj["gapGeral"] = p.gapGeral;
@@ -427,6 +442,7 @@ public:
                     etObj["fim"] = "";
                     etObj["duracao"] = "";
                     etObj["duracaoSegundos"] = -1;
+                    etObj["duracaoMs"] = -1;
                     etObj["status"] = "pendente";
                     etObj["posicaoEtapa"] = 0;
                     etObj["gapEtapa"] = "";
@@ -443,6 +459,7 @@ public:
                     etObj["fim"] = et.fim;
                     etObj["duracao"] = et.duracao;
                     etObj["duracaoSegundos"] = et.duracaoSegundos;
+                    etObj["duracaoMs"] = et.duracaoMs;
                     etObj["status"] = et.status;
                     etObj["posicaoEtapa"] = et.posicaoEtapa;
                     etObj["gapEtapa"] = et.gapEtapa;
@@ -468,22 +485,24 @@ public:
         const char *fim,
         const char *duracao,
         int32_t duracaoSegundos,
+        int32_t duracaoMs,
         const char *status,
         int posicaoEtapa,
         const char *gapEtapa,
         Print &out)
     {
-        char buf[240];
+        char buf[300];
         int len = std::snprintf(
             buf,
             sizeof(buf),
-            "{\"codigo\":\"%s\",\"indice\":%d,\"inicio\":\"%s\",\"fim\":\"%s\",\"duracao\":\"%s\",\"duracaoSegundos\":%ld,\"status\":\"%s\",\"posicaoEtapa\":%d,\"gapEtapa\":\"%s\"}",
+            "{\"codigo\":\"%s\",\"indice\":%d,\"inicio\":\"%s\",\"fim\":\"%s\",\"duracao\":\"%s\",\"duracaoSegundos\":%ld,\"duracaoMs\":%ld,\"status\":\"%s\",\"posicaoEtapa\":%d,\"gapEtapa\":\"%s\"}",
             codigo ? codigo : "",
             indice,
             inicio ? inicio : "",
             fim ? fim : "",
             duracao ? duracao : "",
             static_cast<long>(duracaoSegundos),
+            static_cast<long>(duracaoMs),
             status ? status : "pendente",
             posicaoEtapa,
             gapEtapa ? gapEtapa : "");
@@ -629,8 +648,10 @@ public:
             pObj["etapasEsperadas"] = p.etapasEsperadas;
             pObj["voltasConcluidas"] = p.voltasConcluidas;
             pObj["tempoTotalSegundos"] = p.tempoTotalSegundos;
+            pObj["tempoTotalMs"] = p.tempoTotalMs;
             pObj["tempoTotal"] = p.tempoTotal.c_str();
             pObj["melhorVoltaSegundos"] = p.melhorVoltaSegundos;
+            pObj["melhorVoltaMs"] = p.melhorVoltaMs;
             pObj["melhorVolta"] = p.melhorVolta.c_str();
             pObj["posicaoGeral"] = p.posicaoGeral;
             pObj["gapGeral"] = p.gapGeral.c_str();
@@ -638,7 +659,7 @@ public:
             pObj["gapCategoria"] = p.gapCategoria.c_str();
             pObj["horarioLargadaInicial"] = p.horarioLargadaInicial.c_str();
 
-            char pBuf[768];
+            char pBuf[832];
             size_t pLen = serializeJson(pDoc, pBuf, sizeof(pBuf));
             if (pLen >= 2 && pBuf[pLen - 1] == '}')
             {
@@ -658,6 +679,7 @@ public:
                             "",
                             "",
                             "",
+                            -1,
                             -1,
                             "pendente",
                             0,
@@ -681,6 +703,7 @@ public:
                             et.fim.c_str(),
                             et.duracao.c_str(),
                             et.duracaoSegundos,
+                            et.duracaoMs,
                             et.status.c_str(),
                             et.posicaoEtapa,
                             et.gapEtapa.c_str(),
@@ -745,15 +768,15 @@ private:
             {
                 if (eIdx < pilotos[pIdx].etapas.size() &&
                     pilotos[pIdx].etapas[eIdx].status == "OK" &&
-                    pilotos[pIdx].etapas[eIdx].duracaoSegundos >= 0)
+                    pilotos[pIdx].etapas[eIdx].duracaoMs >= 0)
                 {
                     concluintes.push_back(pIdx);
                 }
             }
 
             std::sort(concluintes.begin(), concluintes.end(), [&](size_t a, size_t b) {
-                int32_t ta = pilotos[a].etapas[eIdx].duracaoSegundos;
-                int32_t tb = pilotos[b].etapas[eIdx].duracaoSegundos;
+                int32_t ta = pilotos[a].etapas[eIdx].duracaoMs;
+                int32_t tb = pilotos[b].etapas[eIdx].duracaoMs;
                 if (ta != tb)
                 {
                     return ta < tb;
@@ -763,13 +786,13 @@ private:
 
             if (!concluintes.empty())
             {
-                int32_t melhorTempoEtapa = pilotos[concluintes[0]].etapas[eIdx].duracaoSegundos;
+                int32_t melhorTempoEtapaMs = pilotos[concluintes[0]].etapas[eIdx].duracaoMs;
                 for (size_t rank = 0; rank < concluintes.size(); ++rank)
                 {
                     size_t pIdx = concluintes[rank];
                     pilotos[pIdx].etapas[eIdx].posicaoEtapa = static_cast<int>(rank + 1);
-                    int32_t diff = pilotos[pIdx].etapas[eIdx].duracaoSegundos - melhorTempoEtapa;
-                    pilotos[pIdx].etapas[eIdx].gapEtapa = formatGapSeconds(diff);
+                    int32_t diffMs = pilotos[pIdx].etapas[eIdx].duracaoMs - melhorTempoEtapaMs;
+                    pilotos[pIdx].etapas[eIdx].gapEtapa = formatGapMs(diffMs);
                 }
             }
         }
@@ -837,7 +860,8 @@ private:
             et.inicio = reg.inicio.c_str();
             et.fim = reg.fim.c_str();
             et.duracao = reg.duracao();
-            et.duracaoSegundos = reg.duracaoSegundos;
+            et.duracaoMs = (reg.duracaoMs >= 0) ? reg.duracaoMs : (reg.duracaoSegundos >= 0 ? reg.duracaoSegundos * 1000 : -1);
+            et.duracaoSegundos = (et.duracaoMs >= 0) ? (et.duracaoMs / 1000) : -1;
             et.status = reg.status.c_str();
         }
 
@@ -852,8 +876,8 @@ private:
             bool temAlgumRegistro = false;
             bool temFalhaOuIncompleto = false;
             bool temLargadaAberta = false;
-            int32_t somaSegundos = 0;
-            int32_t ultimoEstagioSeg = -1;
+            int32_t somaMs = 0;
+            int32_t ultimoEstagioMs = -1;
 
             for (int i = 0; i < etapasExibidas; ++i)
             {
@@ -863,15 +887,15 @@ private:
                     temAlgumRegistro = true;
                 }
 
-                if (et.status == "OK" && et.duracaoSegundos >= 0)
+                if (et.status == "OK" && et.duracaoMs >= 0)
                 {
                     concluidasTotais++;
                     if (i < etapasDisputadas)
                     {
                         concluidasDisputadas++;
                     }
-                    somaSegundos += et.duracaoSegundos;
-                    ultimoEstagioSeg = et.duracaoSegundos;
+                    somaMs += et.duracaoMs;
+                    ultimoEstagioMs = et.duracaoMs;
                 }
                 else if (et.status == "sem_largada" || et.status == "invalido")
                 {
@@ -884,11 +908,13 @@ private:
             }
 
             p.etapasConcluidas = concluidasTotais;
-            p.ultimaEtapaSegundos = ultimoEstagioSeg;
+            p.ultimaEtapaMs = ultimoEstagioMs;
+            p.ultimaEtapaSegundos = (ultimoEstagioMs >= 0) ? (ultimoEstagioMs / 1000) : -1;
 
             if (!temAlgumRegistro)
             {
                 p.situacao = SITUACAO_DNS;
+                p.tempoTotalMs = -1;
                 p.tempoTotalSegundos = -1;
                 p.tempoTotal = "";
                 p.etapas.clear();
@@ -900,8 +926,9 @@ private:
                      !temLargadaAberta)
             {
                 p.situacao = SITUACAO_CLASSIFICADO;
-                p.tempoTotalSegundos = somaSegundos;
-                p.tempoTotal = Cronometragem::formatDuration(somaSegundos);
+                p.tempoTotalMs = somaMs;
+                p.tempoTotalSegundos = somaMs / 1000;
+                p.tempoTotal = Cronometragem::formatDurationMs(somaMs);
             }
             else
             {
@@ -913,12 +940,13 @@ private:
                 {
                     p.situacao = SITUACAO_DNF;
                 }
-                p.tempoTotalSegundos = (concluidasTotais > 0) ? somaSegundos : -1;
-                p.tempoTotal = (concluidasTotais > 0) ? Cronometragem::formatDuration(somaSegundos) : "";
+                p.tempoTotalMs = (concluidasTotais > 0) ? somaMs : -1;
+                p.tempoTotalSegundos = (concluidasTotais > 0) ? (somaMs / 1000) : -1;
+                p.tempoTotal = (concluidasTotais > 0) ? Cronometragem::formatDurationMs(somaMs) : "";
             }
         }
 
-        // Ordena classificação geral no Modo Estágios (DEC-09 / TA-15)
+        // Ordena classificação geral no Modo Estágios (DEC-09 / TA-15) com precisão de milissegundos
         std::sort(pilotos.begin(), pilotos.end(), [&](const piloto_apurado_t &a, const piloto_apurado_t &b) {
             int prioA = prioridadeSituacao(a.situacao);
             int prioB = prioridadeSituacao(b.situacao);
@@ -929,15 +957,15 @@ private:
 
             if (a.situacao == SITUACAO_CLASSIFICADO)
             {
-                if (a.tempoTotalSegundos != b.tempoTotalSegundos)
+                if (a.tempoTotalMs != b.tempoTotalMs)
                 {
-                    return a.tempoTotalSegundos < b.tempoTotalSegundos;
+                    return a.tempoTotalMs < b.tempoTotalMs;
                 }
                 // Desempate: melhor tempo no último estágio disputado, recuando até E1
                 for (int i = static_cast<int>( std::min(a.etapas.size(), b.etapas.size()) ) - 1; i >= 0; --i)
                 {
-                    int32_t ta = a.etapas[i].duracaoSegundos;
-                    int32_t tb = b.etapas[i].duracaoSegundos;
+                    int32_t ta = a.etapas[i].duracaoMs;
+                    int32_t tb = b.etapas[i].duracaoMs;
                     if (ta >= 0 && tb >= 0 && ta != tb)
                     {
                         return ta < tb;
@@ -952,9 +980,9 @@ private:
                 {
                     return a.etapasConcluidas > b.etapasConcluidas;
                 }
-                if (a.tempoTotalSegundos >= 0 && b.tempoTotalSegundos >= 0 && a.tempoTotalSegundos != b.tempoTotalSegundos)
+                if (a.tempoTotalMs >= 0 && b.tempoTotalMs >= 0 && a.tempoTotalMs != b.tempoTotalMs)
                 {
-                    return a.tempoTotalSegundos < b.tempoTotalSegundos;
+                    return a.tempoTotalMs < b.tempoTotalMs;
                 }
                 return a.numeral < b.numeral;
             }
@@ -969,28 +997,28 @@ private:
     static void atribuirPosicoesEGapsEstagios(std::vector<piloto_apurado_t> &pilotos)
     {
         int posGeral = 1;
-        int32_t tempoLiderGeral = -1;
+        int32_t tempoLiderGeralMs = -1;
         std::map<int, int> posPorCat;
-        std::map<int, int32_t> liderPorCat;
+        std::map<int, int32_t> liderPorCatMs;
 
         for (auto &p : pilotos)
         {
             if (p.situacao == SITUACAO_CLASSIFICADO)
             {
                 p.posicaoGeral = posGeral++;
-                if (tempoLiderGeral < 0)
+                if (tempoLiderGeralMs < 0)
                 {
-                    tempoLiderGeral = p.tempoTotalSegundos;
+                    tempoLiderGeralMs = p.tempoTotalMs;
                 }
-                p.gapGeral = formatGapSeconds(p.tempoTotalSegundos - tempoLiderGeral);
+                p.gapGeral = formatGapMs(p.tempoTotalMs - tempoLiderGeralMs);
 
                 int catRank = ++posPorCat[p.categoriaId];
                 p.posicaoCategoria = catRank;
-                if (liderPorCat.find(p.categoriaId) == liderPorCat.end())
+                if (liderPorCatMs.find(p.categoriaId) == liderPorCatMs.end())
                 {
-                    liderPorCat[p.categoriaId] = p.tempoTotalSegundos;
+                    liderPorCatMs[p.categoriaId] = p.tempoTotalMs;
                 }
-                p.gapCategoria = formatGapSeconds(p.tempoTotalSegundos - liderPorCat[p.categoriaId]);
+                p.gapCategoria = formatGapMs(p.tempoTotalMs - liderPorCatMs[p.categoriaId]);
             }
             else
             {
@@ -1074,7 +1102,8 @@ private:
                 et.inicio = reg.inicio.c_str();
                 et.fim = reg.fim.c_str();
                 et.duracao = reg.duracao();
-                et.duracaoSegundos = reg.duracaoSegundos;
+                et.duracaoMs = (reg.duracaoMs >= 0) ? reg.duracaoMs : (reg.duracaoSegundos >= 0 ? reg.duracaoSegundos * 1000 : -1);
+                et.duracaoSegundos = (et.duracaoMs >= 0) ? (et.duracaoMs / 1000) : -1;
                 et.status = reg.status.c_str();
             }
         }
@@ -1085,21 +1114,21 @@ private:
         {
             auto &p = pilotos[idx];
             int voltasOk = 0;
-            int32_t somaSegundos = 0;
-            int32_t melhorVoltaSeg = -1;
-            int32_t ultimaVoltaSeg = -1;
+            int32_t somaMs = 0;
+            int32_t melhorVoltaMs = -1;
+            int32_t ultimaVoltaMs = -1;
             bool temLargadaAberta = !p.horarioLargadaInicial.empty();
 
             for (const auto &et : p.etapas)
             {
-                if (et.status == "OK" && et.duracaoSegundos >= 0)
+                if (et.status == "OK" && et.duracaoMs >= 0)
                 {
                     voltasOk++;
-                    somaSegundos += et.duracaoSegundos;
-                    ultimaVoltaSeg = et.duracaoSegundos;
-                    if (melhorVoltaSeg < 0 || et.duracaoSegundos < melhorVoltaSeg)
+                    somaMs += et.duracaoMs;
+                    ultimaVoltaMs = et.duracaoMs;
+                    if (melhorVoltaMs < 0 || et.duracaoMs < melhorVoltaMs)
                     {
-                        melhorVoltaSeg = et.duracaoSegundos;
+                        melhorVoltaMs = et.duracaoMs;
                     }
                 }
                 else if (et.status == "largada")
@@ -1110,13 +1139,16 @@ private:
 
             p.voltasConcluidas = voltasOk;
             p.etapasConcluidas = voltasOk;
-            p.ultimaEtapaSegundos = ultimaVoltaSeg;
+            p.ultimaEtapaMs = ultimaVoltaMs;
+            p.ultimaEtapaSegundos = (ultimaVoltaMs >= 0) ? (ultimaVoltaMs / 1000) : -1;
 
             if (!temRegistroPorPiloto[idx])
             {
                 p.situacao = SITUACAO_DNS;
+                p.tempoTotalMs = -1;
                 p.tempoTotalSegundos = -1;
                 p.tempoTotal = "";
+                p.melhorVoltaMs = -1;
                 p.melhorVoltaSegundos = -1;
                 p.melhorVolta = "";
                 p.etapas.clear();
@@ -1125,16 +1157,20 @@ private:
             else if (voltasOk > 0)
             {
                 p.situacao = SITUACAO_CLASSIFICADO;
-                p.tempoTotalSegundos = somaSegundos;
-                p.tempoTotal = Cronometragem::formatDuration(somaSegundos);
-                p.melhorVoltaSegundos = melhorVoltaSeg;
-                p.melhorVolta = Cronometragem::formatDuration(melhorVoltaSeg);
+                p.tempoTotalMs = somaMs;
+                p.tempoTotalSegundos = somaMs / 1000;
+                p.tempoTotal = Cronometragem::formatDurationMs(somaMs);
+                p.melhorVoltaMs = melhorVoltaMs;
+                p.melhorVoltaSegundos = melhorVoltaMs / 1000;
+                p.melhorVolta = Cronometragem::formatDurationMs(melhorVoltaMs);
             }
             else
             {
                 p.situacao = (cronometrandoAtivo && temLargadaAberta) ? SITUACAO_EM_CURSO : SITUACAO_DNF;
+                p.tempoTotalMs = -1;
                 p.tempoTotalSegundos = -1;
                 p.tempoTotal = "";
+                p.melhorVoltaMs = -1;
                 p.melhorVoltaSegundos = -1;
                 p.melhorVolta = "";
             }
@@ -1154,17 +1190,17 @@ private:
             {
                 if (usarMelhorVolta)
                 {
-                    if (a.melhorVoltaSegundos != b.melhorVoltaSegundos)
+                    if (a.melhorVoltaMs != b.melhorVoltaMs)
                     {
-                        return a.melhorVoltaSegundos < b.melhorVoltaSegundos;
+                        return a.melhorVoltaMs < b.melhorVoltaMs;
                     }
                     if (a.voltasConcluidas != b.voltasConcluidas)
                     {
                         return a.voltasConcluidas > b.voltasConcluidas;
                     }
-                    if (a.tempoTotalSegundos != b.tempoTotalSegundos)
+                    if (a.tempoTotalMs != b.tempoTotalMs)
                     {
-                        return a.tempoTotalSegundos < b.tempoTotalSegundos;
+                        return a.tempoTotalMs < b.tempoTotalMs;
                     }
                 }
                 else
@@ -1173,17 +1209,17 @@ private:
                     {
                         return a.voltasConcluidas > b.voltasConcluidas;
                     }
-                    if (a.tempoTotalSegundos != b.tempoTotalSegundos)
+                    if (a.tempoTotalMs != b.tempoTotalMs)
                     {
-                        return a.tempoTotalSegundos < b.tempoTotalSegundos;
+                        return a.tempoTotalMs < b.tempoTotalMs;
                     }
-                    if (a.ultimaEtapaSegundos >= 0 && b.ultimaEtapaSegundos >= 0 && a.ultimaEtapaSegundos != b.ultimaEtapaSegundos)
+                    if (a.ultimaEtapaMs >= 0 && b.ultimaEtapaMs >= 0 && a.ultimaEtapaMs != b.ultimaEtapaMs)
                     {
-                        return a.ultimaEtapaSegundos < b.ultimaEtapaSegundos;
+                        return a.ultimaEtapaMs < b.ultimaEtapaMs;
                     }
-                    if (a.melhorVoltaSegundos >= 0 && b.melhorVoltaSegundos >= 0 && a.melhorVoltaSegundos != b.melhorVoltaSegundos)
+                    if (a.melhorVoltaMs >= 0 && b.melhorVoltaMs >= 0 && a.melhorVoltaMs != b.melhorVoltaMs)
                     {
-                        return a.melhorVoltaSegundos < b.melhorVoltaSegundos;
+                        return a.melhorVoltaMs < b.melhorVoltaMs;
                     }
                 }
                 return a.numeral < b.numeral;
@@ -1198,19 +1234,19 @@ private:
     static std::string calcularTextoGapVolta(
         const piloto_apurado_t &piloto,
         int voltasLider,
-        int32_t tempoTotalLider,
-        int32_t melhorVoltaLider,
+        int32_t tempoTotalLiderMs,
+        int32_t melhorVoltaLiderMs,
         bool usarMelhorVolta)
     {
         if (usarMelhorVolta)
         {
-            return formatGapSeconds(piloto.melhorVoltaSegundos - melhorVoltaLider);
+            return formatGapMs(piloto.melhorVoltaMs - melhorVoltaLiderMs);
         }
 
         int diffVoltas = voltasLider - piloto.voltasConcluidas;
         if (diffVoltas <= 0)
         {
-            return formatGapSeconds(piloto.tempoTotalSegundos - tempoTotalLider);
+            return formatGapMs(piloto.tempoTotalMs - tempoTotalLiderMs);
         }
         char buf[32];
         std::snprintf(buf, sizeof(buf), "-%d %s", diffVoltas, (diffVoltas == 1) ? "volta" : "voltas");
@@ -1221,13 +1257,13 @@ private:
     {
         int posGeral = 1;
         int voltasLiderGeral = -1;
-        int32_t tempoLiderGeral = -1;
-        int32_t melhorVoltaLiderGeral = -1;
+        int32_t tempoLiderGeralMs = -1;
+        int32_t melhorVoltaLiderGeralMs = -1;
 
         std::map<int, int> posPorCat;
         std::map<int, int> voltasLiderCat;
-        std::map<int, int32_t> tempoLiderCat;
-        std::map<int, int32_t> melhorVoltaLiderCat;
+        std::map<int, int32_t> tempoLiderCatMs;
+        std::map<int, int32_t> melhorVoltaLiderCatMs;
 
         for (auto &p : pilotos)
         {
@@ -1237,24 +1273,24 @@ private:
                 if (voltasLiderGeral < 0)
                 {
                     voltasLiderGeral = p.voltasConcluidas;
-                    tempoLiderGeral = p.tempoTotalSegundos;
-                    melhorVoltaLiderGeral = p.melhorVoltaSegundos;
+                    tempoLiderGeralMs = p.tempoTotalMs;
+                    melhorVoltaLiderGeralMs = p.melhorVoltaMs;
                 }
-                p.gapGeral = calcularTextoGapVolta(p, voltasLiderGeral, tempoLiderGeral, melhorVoltaLiderGeral, usarMelhorVolta);
+                p.gapGeral = calcularTextoGapVolta(p, voltasLiderGeral, tempoLiderGeralMs, melhorVoltaLiderGeralMs, usarMelhorVolta);
 
                 int catRank = ++posPorCat[p.categoriaId];
                 p.posicaoCategoria = catRank;
                 if (voltasLiderCat.find(p.categoriaId) == voltasLiderCat.end())
                 {
                     voltasLiderCat[p.categoriaId] = p.voltasConcluidas;
-                    tempoLiderCat[p.categoriaId] = p.tempoTotalSegundos;
-                    melhorVoltaLiderCat[p.categoriaId] = p.melhorVoltaSegundos;
+                    tempoLiderCatMs[p.categoriaId] = p.tempoTotalMs;
+                    melhorVoltaLiderCatMs[p.categoriaId] = p.melhorVoltaMs;
                 }
                 p.gapCategoria = calcularTextoGapVolta(
                     p,
                     voltasLiderCat[p.categoriaId],
-                    tempoLiderCat[p.categoriaId],
-                    melhorVoltaLiderCat[p.categoriaId],
+                    tempoLiderCatMs[p.categoriaId],
+                    melhorVoltaLiderCatMs[p.categoriaId],
                     usarMelhorVolta);
             }
             else

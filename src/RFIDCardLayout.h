@@ -122,7 +122,7 @@ inline bool isValidRecord(const Record &r)
     return (r.crc8 == expectedCrc);
 }
 
-// Converte string "HH:MM:SS" para segundos do dia (0 a 86399)
+// Converte string "HH:MM:SS" ou "HH:MM:SS.mmm" para segundos do dia (0 a 86399)
 inline uint32_t timeStringToSeconds(const String &timeStr)
 {
     if (timeStr.length() < 8)
@@ -139,15 +139,46 @@ inline uint32_t timeStringToSeconds(const String &timeStr)
     return static_cast<uint32_t>(h * 3600 + m * 60 + s);
 }
 
-// Converte segundos do dia para string formatada "HH:MM:SS"
-inline String secondsToTimeString(uint32_t seconds)
+// Extrai os milissegundos (0 a 999) de uma string "HH:MM:SS.mmm" (retorna 0 se "HH:MM:SS")
+inline uint16_t timeStringToMillis(const String &timeStr)
 {
-    char buf[12];
+    if (timeStr.length() < 10 || timeStr[8] != '.')
+    {
+        return 0;
+    }
+    uint16_t ms = 0;
+    int digits = 0;
+    for (unsigned int i = 9; i < timeStr.length() && digits < 3; i++)
+    {
+        char c = timeStr[i];
+        if (c >= '0' && c <= '9')
+        {
+            ms = static_cast<uint16_t>(ms * 10 + (c - '0'));
+            digits++;
+        }
+        else
+        {
+            break;
+        }
+    }
+    while (digits > 0 && digits < 3)
+    {
+        ms = static_cast<uint16_t>(ms * 10);
+        digits++;
+    }
+    return (ms <= 999) ? ms : 0;
+}
+
+// Converte segundos do dia e milissegundos para string formatada "HH:MM:SS.mmm"
+inline String secondsToTimeString(uint32_t seconds, uint16_t millis = 0)
+{
+    char buf[16];
     uint32_t s = seconds % 86400;
     int h = s / 3600;
     int m = (s % 3600) / 60;
     int sec = s % 60;
-    snprintf(buf, sizeof(buf), "%02d:%02d:%02d", h, m, sec);
+    uint16_t ms = (millis <= 999) ? millis : 0;
+    snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%03u", h, m, sec, static_cast<unsigned int>(ms));
     return String(buf);
 }
 
@@ -168,11 +199,11 @@ inline void decodeBinaryCardToJson(const String &uid, const Header &h, const std
             String stageKey = "E" + String(rec.id);
             if (rec.flags & FLAG_START)
             {
-                doc["e"][stageKey]["i"] = secondsToTimeString(rec.tsInicio);
+                doc["e"][stageKey]["i"] = secondsToTimeString(rec.tsInicio, rec.msInicio);
             }
             if (rec.flags & FLAG_FINISH)
             {
-                doc["e"][stageKey]["f"] = secondsToTimeString(rec.tsFim);
+                doc["e"][stageKey]["f"] = secondsToTimeString(rec.tsFim, rec.msFim);
             }
         }
     }
@@ -187,7 +218,7 @@ inline void decodeBinaryCardToJson(const String &uid, const Header &h, const std
             }
             if (rec.flags & FLAG_START)
             {
-                lapsArr.add(secondsToTimeString(rec.tsInicio));
+                lapsArr.add(secondsToTimeString(rec.tsInicio, rec.msInicio));
             }
         }
     }
@@ -209,11 +240,11 @@ inline void decodeBinaryCardToJson(const String &uid, const Header &h, const std
                                  : voltasArr[rec.id - 1].as<JsonObject>();
             if (rec.flags & FLAG_START)
             {
-                obj["i"] = secondsToTimeString(rec.tsInicio);
+                obj["i"] = secondsToTimeString(rec.tsInicio, rec.msInicio);
             }
             if (rec.flags & FLAG_FINISH)
             {
-                obj["f"] = secondsToTimeString(rec.tsFim);
+                obj["f"] = secondsToTimeString(rec.tsFim, rec.msFim);
             }
         }
     }

@@ -70,7 +70,13 @@ void ESP32SvelteKit::begin()
     // Com ativos estaticos servidos via handler unico em Flash / fallback SPA,
     // nao precisamos registrar 91 rotas individuais no PsychicHttpServer.
     // 60 max_uri_handlers e suficiente para todas as rotas REST e WebSocket.
-    _server->config.max_uri_handlers = _numberEndpoints;
+    _server->config.max_uri_handlers = _numberEndpoints;
+    _server->config.lru_purge_enable = true;
+#ifdef CONFIG_LWIP_MAX_SOCKETS
+    if (_server->config.max_open_sockets <= 7 && CONFIG_LWIP_MAX_SOCKETS > 10) {
+        _server->config.max_open_sockets = (CONFIG_LWIP_MAX_SOCKETS - 3 > 12) ? 12 : (CONFIG_LWIP_MAX_SOCKETS - 3);
+    }
+#endif
     _server->listen(80);
 
 #ifdef EMBED_WWW

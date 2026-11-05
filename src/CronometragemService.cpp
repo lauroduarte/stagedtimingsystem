@@ -302,7 +302,7 @@ bool CronometragemService::appendRegistroToFS(const cronometragem_t &reg)
         return false;
     }
 
-    char buf[256];
+    char buf[320];
     int len = Cronometragem::formatItemJson(reg, buf, sizeof(buf), true);
 
     if (len <= 0 || static_cast<size_t>(len) >= sizeof(buf))
@@ -340,7 +340,7 @@ bool CronometragemService::saveToFS()
         return false;
     }
 
-    char buf[256];
+    char buf[320];
     bool ok = true;
 
     this->read([&](Cronometragem &state) {

@@ -115,7 +115,8 @@
 	function formatarDataHoraDispositivoISO(): string {
 		const agora = new Date();
 		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${agora.getFullYear()}-${pad(agora.getMonth() + 1)}-${pad(agora.getDate())}T${pad(agora.getHours())}:${pad(agora.getMinutes())}:${pad(agora.getSeconds())}`;
+		const pad3 = (n: number) => String(n).padStart(3, '0');
+		return `${agora.getFullYear()}-${pad(agora.getMonth() + 1)}-${pad(agora.getDate())}T${pad(agora.getHours())}:${pad(agora.getMinutes())}:${pad(agora.getSeconds())}.${pad3(agora.getMilliseconds())}`;
 	}
 
 	function calcularDiagnosticoLocal(lista: CronometragemItem[]): SyncDiagnostico {
@@ -147,32 +148,19 @@
 
 	async function recarregarEstadoLocal() {
 		try {
-			const [
-				provaData,
-				categoriasData,
-				atletasData,
-				cardsData,
-				relogioData,
-				cronometrarData,
-				cronometragemData
-			] = await Promise.all([
-				getProva().catch(() => undefined),
-				getCategorias().catch(() => []),
-				getAtletas().catch(() => []),
-				getRFIDCards().catch(() => []),
-				getRelogio().catch(() => undefined),
-				getCronometrar().catch(() => undefined),
-				getCronometragens().catch(() => [])
-			]);
+			const pkg = await getSyncConfigLocal();
+			const cronometragemData = await getCronometragens().catch(() => []);
 
-			prova = provaData;
-			categorias = categoriasData;
-			atletas = atletasData;
-			rfidCards = cardsData;
-			relogio = relogioData;
-			cronometrar = cronometrarData;
-			cronometragens = cronometragemData;
-			diagnosticoLocal = calcularDiagnosticoLocal(cronometragemData);
+			prova = pkg?.prova;
+			categorias = Array.isArray(pkg?.categorias) ? pkg.categorias : [];
+			atletas = Array.isArray(pkg?.atletas) ? pkg.atletas : [];
+			rfidCards = Array.isArray(pkg?.rfidCards) ? pkg.rfidCards : [];
+			relogio = pkg?.relogio
+				? { datetime: pkg.relogio.datetimeMs || pkg.relogio.datetime || '' }
+				: undefined;
+			cronometrar = pkg?.estacao;
+			cronometragens = Array.isArray(cronometragemData) ? cronometragemData : [];
+			diagnosticoLocal = calcularDiagnosticoLocal(cronometragens);
 		} catch (e) {
 			console.warn('Erro ao recarregar dados locais da estação:', e);
 		}

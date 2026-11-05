@@ -50,22 +50,45 @@ function getAuthHeader(): string {
 	return page.data?.features?.security ? 'Bearer ' + token : 'Basic';
 }
 
+async function fetchLocalGetJson<T>(
+	url: string,
+	retries = 2,
+	retryDelayMs = 150,
+	timeoutMs = 6000
+): Promise<T> {
+	let lastError: unknown;
+	for (let attempt = 0; attempt <= retries; attempt++) {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+		try {
+			const response = await fetch(url, {
+				method: 'GET',
+				headers: {
+					Authorization: getAuthHeader(),
+					'Content-Type': 'application/json'
+				},
+				signal: controller.signal
+			});
+			clearTimeout(timeoutId);
+			if (response.status === 200) {
+				return (await response.json()) as T;
+			}
+			throw new Error(`HTTP ${response.status} ${response.statusText}`);
+		} catch (error) {
+			clearTimeout(timeoutId);
+			lastError = error;
+			if (attempt < retries) {
+				await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
+			}
+		}
+	}
+	throw lastError instanceof Error ? lastError : new Error(`Falha ao comunicar com ${url}`);
+}
+
 export async function getAtletas(): Promise<Atleta[]> {
 	try {
-		const response = await fetch('/rest/atleta', {
-			method: 'GET',
-			headers: {
-				Authorization: getAuthHeader(),
-				'Content-Type': 'application/json'
-			}
-		});
-		if (response.status === 200) {
-			const data = await response.json();
-			const atletasData = data.atletas || [];
-			return atletasData;
-		} else {
-			throw new Error(`Erro ao carregar os atletas: ${response.status} ${response.statusText}`);
-		}
+		const data = await fetchLocalGetJson<{ atletas?: Atleta[] }>('/rest/atleta');
+		return Array.isArray(data?.atletas) ? data.atletas : [];
 	} catch (error) {
 		console.error('Erro ao carregar os atletas:', error);
 		throw new Error('Erro ao carregar os atletas');
@@ -74,20 +97,8 @@ export async function getAtletas(): Promise<Atleta[]> {
 
 export async function getCategorias(): Promise<Categoria[]> {
 	try {
-		const response = await fetch('/rest/categoria', {
-			method: 'GET',
-			headers: {
-				Authorization: getAuthHeader(),
-				'Content-Type': 'application/json'
-			}
-		});
-		if (response.status === 200) {
-			const data = await response.json();
-			const categoriasData = data.categorias || [];
-			return categoriasData;
-		} else {
-			throw new Error(`Erro ao carregar as categorias: ${response.status} ${response.statusText}`);
-		}
+		const data = await fetchLocalGetJson<{ categorias?: Categoria[] }>('/rest/categoria');
+		return Array.isArray(data?.categorias) ? data.categorias : [];
 	} catch (error) {
 		console.error('Erro ao carregar as categorias:', error);
 		throw new Error('Erro ao carregar as categorias');
@@ -96,21 +107,9 @@ export async function getCategorias(): Promise<Categoria[]> {
 
 export async function getCronometrar(): Promise<Cronometrar | undefined> {
 	try {
-		const response = await fetch('/rest/cronometrar', {
-			method: 'GET',
-			headers: {
-				Authorization: getAuthHeader(),
-				'Content-Type': 'application/json'
-			}
-		});
-		if (response.status === 200) {
-			const data = await response.json();
-			// Ensure data is not null or undefined
-			if (data && typeof data === 'object') {
-				return { ...data } as Cronometrar;
-			}
-		} else {
-			throw new Error(`Erro ao carregar o cronometrar: ${response.status} ${response.statusText}`);
+		const data = await fetchLocalGetJson<Cronometrar>('/rest/cronometrar');
+		if (data && typeof data === 'object') {
+			return { ...data } as Cronometrar;
 		}
 	} catch (error) {
 		console.error('Erro ao carregar o cronometrar:', error);
@@ -121,21 +120,9 @@ export async function getCronometrar(): Promise<Cronometrar | undefined> {
 
 export async function getProva(): Promise<Prova | undefined> {
 	try {
-		const response = await fetch('/rest/prova', {
-			method: 'GET',
-			headers: {
-				Authorization: getAuthHeader(),
-				'Content-Type': 'application/json'
-			}
-		});
-		if (response.status === 200) {
-			const data = await response.json();
-			// Ensure data is not null or undefined
-			if (data && typeof data === 'object') {
-				return { ...data } as Prova;
-			}
-		} else {
-			throw new Error(`Erro ao carregar a prova: ${response.status} ${response.statusText}`);
+		const data = await fetchLocalGetJson<Prova>('/rest/prova');
+		if (data && typeof data === 'object') {
+			return { ...data } as Prova;
 		}
 	} catch (error) {
 		console.error('Erro ao carregar a prova:', error);
@@ -146,21 +133,9 @@ export async function getProva(): Promise<Prova | undefined> {
 
 export async function getRelogio(): Promise<Relogio | undefined> {
 	try {
-		const response = await fetch('/rest/relogio', {
-			method: 'GET',
-			headers: {
-				Authorization: getAuthHeader(),
-				'Content-Type': 'application/json'
-			}
-		});
-		if (response.status === 200) {
-			const data = await response.json();
-			// Ensure data is not null or undefined
-			if (data && typeof data === 'object') {
-				return { ...data } as Relogio;
-			}
-		} else {
-			throw new Error(`Erro ao carregar o relogio: ${response.status} ${response.statusText}`);
+		const data = await fetchLocalGetJson<Relogio>('/rest/relogio');
+		if (data && typeof data === 'object') {
+			return { ...data } as Relogio;
 		}
 	} catch (error) {
 		console.error('Erro ao carregar o relogio:', error);
@@ -333,20 +308,8 @@ export async function stopRFIDReset(): Promise<RFIDCard[]> {
 
 export async function getRFIDCards(): Promise<RFIDCard[]> {
 	try {
-		const response = await fetch('/rest/rfid', {
-			method: 'GET',
-			headers: {
-				Authorization: getAuthHeader(),
-				'Content-Type': 'application/json'
-			}
-		});
-		if (response.status === 200) {
-			const data = await response.json();
-			const rfidData = data.cards || [];
-			return rfidData;
-		} else {
-			throw new Error(`Erro ao carregar os RFIDs: ${response.status} ${response.statusText}`);
-		}
+		const data = await fetchLocalGetJson<{ cards?: RFIDCard[] }>('/rest/rfid');
+		return Array.isArray(data?.cards) ? data.cards : [];
 	} catch (error) {
 		console.error('Erro ao carregar os RFIDs:', error);
 		throw new Error('Erro ao carregar os RFIDs');
@@ -355,19 +318,8 @@ export async function getRFIDCards(): Promise<RFIDCard[]> {
 
 export async function getCronometragens(): Promise<CronometragemItem[]> {
 	try {
-		const response = await fetch('/rest/cronometragem', {
-			method: 'GET',
-			headers: {
-				Authorization: getAuthHeader(),
-				'Content-Type': 'application/json'
-			}
-		});
-		if (response.status === 200) {
-			const data = await response.json();
-			return Array.isArray(data?.cronometragem) ? data.cronometragem : [];
-		} else {
-			throw new Error(`Erro ao carregar cronometragem: ${response.status} ${response.statusText}`);
-		}
+		const data = await fetchLocalGetJson<{ cronometragem?: CronometragemItem[] }>('/rest/cronometragem');
+		return Array.isArray(data?.cronometragem) ? data.cronometragem : [];
 	} catch (error) {
 		console.error('Erro ao carregar cronometragem:', error);
 		throw new Error('Erro ao carregar cronometragem');
@@ -458,10 +410,7 @@ export async function getSyncStatusRemoto(
 }
 
 export async function getSyncConfigLocal(): Promise<SyncConfigPackage> {
-	const { data } = await fetchJsonComTimeout<SyncConfigPackage>('/rest/sync/config', {
-		method: 'GET'
-	});
-	return data;
+	return await fetchLocalGetJson<SyncConfigPackage>('/rest/sync/config', 2, 150, 8000);
 }
 
 export async function aplicarSyncConfigLocal(pkg: SyncConfigPackage): Promise<SyncConfigResponse> {
@@ -484,13 +433,20 @@ export async function enviarSyncConfigParaEstacao(
 	const endpoints = resolverEndpointsSync(rawUrl);
 	const localPkg = await getSyncConfigLocal();
 	const relogioAtual = await getRelogio().catch(() => undefined);
+	const dtIso =
+		localPkg.relogio?.datetimeMs ||
+		relogioAtual?.datetime ||
+		localPkg.relogio?.datetime ||
+		'';
 
 	const payload: SyncConfigPackage = {
 		...localPkg,
 		ajustarRelogio,
 		relogio: {
-			datetime: relogioAtual?.datetime || localPkg.relogio?.datetime || '',
-			offsetSeconds: 0
+			datetime: dtIso,
+			datetimeMs: dtIso,
+			offsetSeconds: 0,
+			offsetMs: 0
 		}
 	};
 
@@ -517,14 +473,16 @@ export async function puxarSyncConfigDeEstacao(
 		6000
 	);
 
-	const offsetCompensado = Math.round(rttMs / 2000);
+	const offsetMsCompensado = Math.round(rttMs / 2);
 	const payloadParaAplicar: SyncConfigPackage = {
 		...remotePkg,
 		ajustarRelogio,
 		relogio: remotePkg.relogio
 			? {
 					...remotePkg.relogio,
-					offsetSeconds: offsetCompensado
+					datetime: remotePkg.relogio.datetimeMs || remotePkg.relogio.datetime,
+					offsetSeconds: 0,
+					offsetMs: offsetMsCompensado
 				}
 			: undefined
 	};
@@ -543,12 +501,14 @@ export async function sincronizarRelogioComEstacao(
 		if (!status.relogio) {
 			throw new Error('A estação remota não retornou um horário válido.');
 		}
-		const offsetSeconds = Math.round(rttMs / 2000);
+		const offsetMs = Math.round(rttMs / 2);
 		const localResp = await aplicarSyncConfigLocal({
 			ajustarRelogio: true,
 			relogio: {
 				datetime: status.relogio,
-				offsetSeconds
+				datetimeMs: status.relogio,
+				offsetSeconds: 0,
+				offsetMs
 			}
 		});
 		return {
@@ -557,7 +517,10 @@ export async function sincronizarRelogioComEstacao(
 		};
 	}
 
-	const relogioLocal = await getRelogio();
+	const localPkg = await getSyncConfigLocal().catch(() => undefined);
+	const relogioLocal = localPkg?.relogio?.datetime
+		? { datetime: localPkg.relogio.datetimeMs || localPkg.relogio.datetime }
+		: await getRelogio();
 	if (!relogioLocal?.datetime) {
 		throw new Error('Não foi possível obter o horário do RTC desta estação.');
 	}
@@ -571,7 +534,9 @@ export async function sincronizarRelogioComEstacao(
 				ajustarRelogio: true,
 				relogio: {
 					datetime: relogioLocal.datetime,
-					offsetSeconds: 0
+					datetimeMs: relogioLocal.datetime,
+					offsetSeconds: 0,
+					offsetMs: 0
 				}
 			})
 		},

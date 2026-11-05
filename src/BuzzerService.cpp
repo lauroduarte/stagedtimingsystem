@@ -1,4 +1,5 @@
 #include "BuzzerService.h"
+#include <driver/gpio.h>
 
 BuzzerService::BuzzerService(uint8_t pin, uint8_t channel)
     : _pin(pin), _channel(channel), _initialized(false) {
@@ -23,6 +24,8 @@ void BuzzerService::begin() {
     ledcAttachPin(_pin, _channel);
     ledcWriteTone(_channel, 0);
 #endif
+    // Configura força máxima de corrente no pino GPIO (40mA - GPIO_DRIVE_CAP_3) para máximo volume em ambiente externo
+    gpio_set_drive_capability(static_cast<gpio_num_t>(_pin), GPIO_DRIVE_CAP_3);
 
     _initialized = true;
     if (_mutex) xSemaphoreGive(_mutex);
@@ -41,6 +44,7 @@ void BuzzerService::playToneHardware(unsigned int freqHz) {
 #else
     ledcWriteTone(_channel, freqHz);
 #endif
+    gpio_set_drive_capability(static_cast<gpio_num_t>(_pin), GPIO_DRIVE_CAP_3);
 }
 
 void BuzzerService::stopToneInternal() {
@@ -104,28 +108,39 @@ void BuzzerService::beepTone(unsigned int freqHz, unsigned int durationMs) {
 }
 
 void BuzzerService::beepError() {
-    ToneStep steps[3] = {
-        { 300, 180 },
-        { 0,   80  },
-        { 300, 220 }
+    // Alerta sonoro forte bitonal na faixa de alta eficiência acústica para ambiente externo
+    ToneStep steps[7] = {
+        { static_cast<uint16_t>(FREQ_ERROR_HIGH), 220 },
+        { 0,                                       50  },
+        { static_cast<uint16_t>(FREQ_ERROR_LOW),  220 },
+        { 0,                                       50  },
+        { static_cast<uint16_t>(FREQ_ERROR_HIGH), 220 },
+        { 0,                                       50  },
+        { static_cast<uint16_t>(FREQ_ERROR_LOW),  320 }
     };
-    playPattern(steps, 3);
+    playPattern(steps, 7);
 }
 
 void BuzzerService::beepWarning() {
-    ToneStep steps[3] = {
-        { 600, 140 },
-        { 0,   60  },
-        { 600, 140 }
+    // Alerta triplo de alta pressão sonora (2400 Hz) para máxima audibilidade externa
+    ToneStep steps[5] = {
+        { static_cast<uint16_t>(FREQ_WARNING), 180 },
+        { 0,                                    60  },
+        { static_cast<uint16_t>(FREQ_WARNING), 180 },
+        { 0,                                    60  },
+        { static_cast<uint16_t>(FREQ_WARNING), 240 }
     };
-    playPattern(steps, 3);
+    playPattern(steps, 5);
 }
 
 void BuzzerService::beepSuccess() {
-    ToneStep steps[1] = {
-        { 1000, 300 }
+    // Confirmação potente na frequência de ressonância (2730 Hz -> 3100 Hz) para ambiente externo
+    ToneStep steps[3] = {
+        { static_cast<uint16_t>(DEFAULT_BEEP_FREQ), 180 },
+        { 0,                                         40  },
+        { static_cast<uint16_t>(FREQ_SUCCESS_HIGH), 320 }
     };
-    playPattern(steps, 1);
+    playPattern(steps, 3);
 }
 
 void BuzzerService::loop() {

@@ -15,12 +15,14 @@ class Relogio {
 public:
     std::string datetime;
 
-    static void syncSystemTime(const DateTime &dt) {
+    static void syncSystemTime(const DateTime &dt, uint16_t ms = 0) {
         timeval tv;
         tv.tv_sec = dt.unixtime();
-        tv.tv_usec = 0;
+        tv.tv_usec = static_cast<suseconds_t>((ms % 1000) * 1000);
         settimeofday(&tv, nullptr);
-        Serial.printf("System POSIX time synchronized: %lu\n", (unsigned long)tv.tv_sec);
+        Serial.printf("System POSIX time synchronized: %lu.%03u\n",
+                      (unsigned long)tv.tv_sec,
+                      (unsigned int)(ms % 1000));
     }
 
     static SemaphoreHandle_t getI2CMutex() {
@@ -57,7 +59,7 @@ public:
         }
         xSemaphoreGive(mtx);
 
-        syncSystemTime(dt);
+        syncSystemTime(dt, 0);
         return true;
     }
 
@@ -95,13 +97,20 @@ public:
         return getHardwarePresentRef();
     }
 
+    static DateTime getNowMs(uint16_t &outMs) {
+        getRTC();
+        timeval tv{};
+        gettimeofday(&tv, nullptr);
+        outMs = static_cast<uint16_t>((tv.tv_usec / 1000) % 1000);
+        return DateTime(static_cast<uint32_t>(tv.tv_sec));
+    }
+
     static DateTime getNow() {
         // Garante que a sincronização inicial do RTC (se presente) já ocorreu no boot,
         // mas lê sempre o relógio POSIX interno em RAM para evitar colisões/travamentos
         // no barramento I2C (Error 263 / -1) durante chamadas concorrentes entre loop() e HTTP.
-        getRTC();
-        time_t t = time(nullptr);
-        return DateTime(static_cast<uint32_t>(t));
+        uint16_t dummyMs = 0;
+        return getNowMs(dummyMs);
     }
 
     static std::string formatDateTime(const DateTime &dt) {
@@ -112,15 +121,49 @@ public:
         return std::string(buffer);
     }
 
-    static bool applyDateTimeString(const std::string &isoStr, int32_t offsetSeconds = 0) {
+    static std::string formatDateTimeMs(const DateTime &dt, uint16_t ms) {
+        char buffer[30];
+        snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02d.%03u",
+                 dt.year(), dt.month(), dt.day(),
+                 dt.hour(), dt.minute(), dt.second(),
+                 static_cast<unsigned int>(ms % 1000));
+        return std::string(buffer);
+    }
+
+    static std::string formatTimeHMSMs(const DateTime &dt, uint16_t ms) {
+        char buffer[16];
+        snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d.%03u",
+                 dt.hour(), dt.minute(), dt.second(),
+                 static_cast<unsigned int>(ms % 1000));
+        return std::string(buffer);
+    }
+
+    static bool applyDateTimeString(const std::string &isoStr, int32_t offsetSeconds = 0, int32_t offsetMs = 0) {
         if (isoStr.empty()) {
             return false;
         }
 
         std::string limpa = isoStr;
-        // Remove 'Z' ou frações de segundo (.000Z) se presentes
+        uint16_t parsedMs = 0;
+        // Extrai frações de segundo (.mmm) e remove 'Z' se presentes
         size_t dotPos = limpa.find('.');
         if (dotPos != std::string::npos) {
+            std::string frac = limpa.substr(dotPos + 1);
+            int digits = 0;
+            int val = 0;
+            for (char c : frac) {
+                if (c >= '0' && c <= '9' && digits < 3) {
+                    val = val * 10 + (c - '0');
+                    digits++;
+                } else {
+                    break;
+                }
+            }
+            while (digits > 0 && digits < 3) {
+                val *= 10;
+                digits++;
+            }
+            parsedMs = static_cast<uint16_t>(val);
             limpa = limpa.substr(0, dotPos);
         }
         if (!limpa.empty() && (limpa.back() == 'Z' || limpa.back() == 'z')) {
@@ -136,10 +179,14 @@ public:
         }
         DateTime dt(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
                     timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-        if (offsetSeconds != 0) {
-            uint32_t adjustedUnix = static_cast<uint32_t>(static_cast<int64_t>(dt.unixtime()) + offsetSeconds);
-            dt = DateTime(adjustedUnix);
-        }
+
+        int64_t totalEpochMs = static_cast<int64_t>(dt.unixtime()) * 1000LL +
+                               static_cast<int64_t>(parsedMs) +
+                               static_cast<int64_t>(offsetSeconds) * 1000LL +
+                               static_cast<int64_t>(offsetMs);
+        uint32_t adjustedUnix = static_cast<uint32_t>(totalEpochMs / 1000LL);
+        uint16_t adjustedMs = static_cast<uint16_t>((totalEpochMs % 1000LL + 1000LL) % 1000LL);
+        dt = DateTime(adjustedUnix);
 
         // Ajusta o RTC se presente (protegido por mutex I2C)
         if (isHardwarePresent()) {
@@ -150,8 +197,8 @@ public:
             if (mtx) xSemaphoreGive(mtx);
         }
 
-        // Sempre sincroniza o clock POSIX do sistema
-        syncSystemTime(dt);
+        // Sempre sincroniza o clock POSIX do sistema com precisão de milissegundos
+        syncSystemTime(dt, adjustedMs);
         return true;
     }
 
@@ -166,8 +213,9 @@ public:
         if (!root["datetime"].is<const char*>()) return StateUpdateResult::ERROR;
         std::string newDatetime = root["datetime"].as<std::string>();
         int32_t offsetSec = root["offsetSeconds"].is<int>() ? root["offsetSeconds"].as<int>() : 0;
+        int32_t offsetMs = root["offsetMs"].is<int>() ? root["offsetMs"].as<int>() : 0;
 
-        if (!applyDateTimeString(newDatetime, offsetSec)) {
+        if (!applyDateTimeString(newDatetime, offsetSec, offsetMs)) {
             return StateUpdateResult::ERROR;
         }
 

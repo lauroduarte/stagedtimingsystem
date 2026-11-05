@@ -202,6 +202,7 @@ export type CronometragemItem = {
 	fim: string;
 	duracao?: string;
 	duracaoSegundos?: number;
+	duracaoMs?: number;
 	status?: string;
 	incompleto?: boolean;
 }
@@ -248,8 +249,11 @@ export type SyncConfigPackage = {
 	versao?: number;
 	relogio?: {
 		datetime: string;
+		datetimeMs?: string;
 		unixtime?: number;
+		ms?: number;
 		offsetSeconds?: number;
+		offsetMs?: number;
 	};
 	prova?: Prova;
 	categorias?: Categoria[];
@@ -310,6 +314,7 @@ export type EtapaApurada = {
 	fim: string;
 	duracao: string;
 	duracaoSegundos: number;
+	duracaoMs?: number;
 	status: string; // 'OK' | 'largada' | 'sem_largada' | 'invalido' | 'pendente'
 	posicaoEtapa: number;
 	gapEtapa: string;
@@ -327,8 +332,10 @@ export type PilotoApurado = {
 	etapasEsperadas: number;
 	voltasConcluidas: number;
 	tempoTotalSegundos: number;
+	tempoTotalMs?: number;
 	tempoTotal: string;
 	melhorVoltaSegundos: number;
+	melhorVoltaMs?: number;
 	melhorVolta: string;
 	posicaoGeral: number;
 	gapGeral: string;
