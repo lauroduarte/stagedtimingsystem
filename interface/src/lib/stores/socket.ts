@@ -6,33 +6,64 @@ function createWebSocket() {
 	const { subscribe, set } = writable(false);
 	const socketEvents = ['open', 'close', 'error', 'message', 'unresponsive'] as const;
 	type SocketEvent = (typeof socketEvents)[number];
-	let unresponsiveTimeoutId: number;
-	let reconnectTimeoutId: number;
-	let ws: WebSocket;
+	let unresponsiveTimeoutId: ReturnType<typeof setTimeout>;
+	let reconnectTimeoutId: ReturnType<typeof setTimeout>;
+	let ws: WebSocket | undefined;
 	let socketUrl: string | URL;
 	let event_use_json = false;
 
+	function cleanupSocket(target?: WebSocket) {
+		if (!target) return;
+		target.onopen = null;
+		target.onmessage = null;
+		target.onerror = null;
+		target.onclose = null;
+		try {
+			if (target.readyState === WebSocket.OPEN || target.readyState === WebSocket.CONNECTING) {
+				target.close();
+			}
+		} catch {
+			// Ignore close errors
+		}
+	}
+
 	function init(url: string | URL, use_json: boolean = false) {
+		const nextUrl = String(url);
+		if (
+			ws &&
+			String(socketUrl) === nextUrl &&
+			(ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)
+		) {
+			event_use_json = use_json;
+			return;
+		}
 		socketUrl = url;
 		event_use_json = use_json;
+		clearTimeout(unresponsiveTimeoutId);
+		clearTimeout(reconnectTimeoutId);
+		cleanupSocket(ws);
 		connect();
 	}
 
 	function disconnect(reason: SocketEvent, event?: Event) {
 		console.log('disconnect', reason, event);
-		ws.close();
+		cleanupSocket(ws);
 		set(false);
 		clearTimeout(unresponsiveTimeoutId);
 		clearTimeout(reconnectTimeoutId);
 		listeners.get(reason)?.forEach((listener) => listener(event));
-		reconnectTimeoutId = setTimeout(connect, 1000);
+		reconnectTimeoutId = setTimeout(connect, 2000);
 	}
 
 	function connect() {
+		if (!socketUrl) return;
+		cleanupSocket(ws);
 		console.log('connect');
-		ws = new WebSocket(socketUrl);
-		ws.binaryType = 'arraybuffer';
-		ws.onopen = (ev) => {
+		const currentWs = new WebSocket(socketUrl);
+		ws = currentWs;
+		currentWs.binaryType = 'arraybuffer';
+		currentWs.onopen = (ev) => {
+			if (ws !== currentWs) return;
 			set(true);
 			clearTimeout(reconnectTimeoutId);
 			listeners.get('open')?.forEach((listener) => listener(ev));
@@ -41,7 +72,8 @@ function createWebSocket() {
 				sendEvent('subscribe', event);
 			}
 		};
-		ws.onmessage = (message) => {
+		currentWs.onmessage = (message) => {
+			if (ws !== currentWs) return;
 			resetUnresponsiveCheck();
 			let payload = message.data;
 
@@ -57,8 +89,14 @@ function createWebSocket() {
 			const { event, data } = payload;
 			if (event) listeners.get(event)?.forEach((listener) => listener(data));
 		};
-		ws.onerror = (ev) => disconnect('error', ev);
-		ws.onclose = (ev) => disconnect('close', ev);
+		currentWs.onerror = (ev) => {
+			if (ws !== currentWs) return;
+			disconnect('error', ev);
+		};
+		currentWs.onclose = (ev) => {
+			if (ws !== currentWs) return;
+			disconnect('close', ev);
+		};
 	}
 
 	function unsubscribe(event: string, listener?: (data: any) => void) {
@@ -77,7 +115,7 @@ function createWebSocket() {
 
 	function resetUnresponsiveCheck() {
 		clearTimeout(unresponsiveTimeoutId);
-		unresponsiveTimeoutId = setTimeout(() => disconnect('unresponsive'), 2000);
+		unresponsiveTimeoutId = setTimeout(() => disconnect('unresponsive'), 10000);
 	}
 
 	function send(msg: unknown) {

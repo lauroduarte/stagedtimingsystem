@@ -16,8 +16,8 @@
 	import Stopwatch from '~icons/tabler/24-hours';
 	import type { NTPSettings, NTPStatus } from '$lib/types/models';
 
-	let ntpSettings: NTPSettings = $state();
-	let ntpStatus: NTPStatus = $state();
+	let ntpSettings: NTPSettings = $state()!;
+	let ntpStatus: NTPStatus = $state()!;
 
 	async function getNTPStatus() {
 		try {
@@ -113,7 +113,6 @@
 		// Submit JSON to REST API
 		if (valid) {
 			postNTPSettings(ntpSettings);
-			//alert('Form Valid');
 		}
 	}
 
@@ -144,8 +143,8 @@
 		return result;
 	}
 
-	function preventDefault(fn) {
-		return function (event) {
+	function preventDefault(fn: (event: Event) => void) {
+		return function (this: unknown, event: Event) {
 			event.preventDefault();
 			fn.call(this, event);
 		};

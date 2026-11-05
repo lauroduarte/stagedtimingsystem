@@ -118,6 +118,11 @@ String WiFiSettingsService::getIP()
 
 void WiFiSettingsService::manageSTA()
 {
+    // Suspende varredura/reconexao STA durante cronometragem ativa para proteger o SoftAP (P1-05)
+    if (_isCronometrandoCallback && _isCronometrandoCallback())
+    {
+        return;
+    }
     // Abort if already connected, if we have no SSID, or are in offline mode
     if (WiFi.isConnected() || _state.wifiSettings.empty() || _state.staConnectionMode == (u_int8_t)STAConnectionMode::OFFLINE)
     {
@@ -136,6 +141,10 @@ void WiFiSettingsService::manageSTA()
 
 void WiFiSettingsService::connectToWiFi()
 {
+    if (_isCronometrandoCallback && _isCronometrandoCallback())
+    {
+        return;
+    }
     // reset availability flag for all stored networks
     for (auto &network : _state.wifiSettings)
     {

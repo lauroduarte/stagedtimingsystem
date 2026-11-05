@@ -11,6 +11,6 @@
 		<label for="main-menu" class="btn btn-ghost btn-circle btn-sm drawer-button lg:hidden"
 			><Hamburger class="h-6 w-auto" /></label
 		>
-		<span class="inline-block px-2 text-xl font-bold lg:text-2xl">{page.data.title}</span>
+		<span class="inline-block px-2 text-lg sm:text-xl font-bold lg:text-2xl truncate">{page.data.title}</span>
 	</div>
 </div>

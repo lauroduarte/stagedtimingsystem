@@ -11,7 +11,7 @@
 		username: string;
 	};
 
-	let { signIn } : { signIn: () => void } = $props();
+	let { signIn }: { signIn: () => void } = $props();
 
 	let username = $state('');
 	let password = $state('');
@@ -50,34 +50,37 @@
 	}
 </script>
 
-<div class="hero from-primary/30 to-secondary/30 min-h-screen bg-linear-to-br">
+<div class="hero from-primary/30 to-secondary/30 min-h-screen bg-linear-to-br px-3 py-6">
 	<div
-		class="card lg:card-side bg-base-100 shadow-primary face shadow-2xl {loginFailed
+		class="card lg:card-side bg-base-100 shadow-primary face shadow-2xl w-full max-w-sm lg:max-w-xl mx-auto {loginFailed
 			? 'failure border-error border-2'
 			: ''}"
 		in:fly={{ delay: 200, y: 100, duration: 500 }}
 		out:fade={{ duration: 200 }}
 	>
-		<figure class="bg-base-200"><img src={logo} alt="Logo" class="h-auto w-48 lg:w-64" /></figure>
-		<div class="card-body w-80">
-			<h2 class="card-title text-2xl">Login</h2>
-			<form class="fieldset w-full max-w-xs">
+		<figure class="bg-base-200 p-4 flex items-center justify-center">
+			<img src={logo} alt="Logo" class="h-auto w-36 sm:w-48 lg:w-56" />
+		</figure>
+		<div class="card-body p-5 sm:p-8 w-full">
+			<h2 class="card-title text-xl sm:text-2xl">Login</h2>
+			<form class="fieldset w-full" onsubmit={(e) => { e.preventDefault(); signInUser({ username, password }); }}>
 				<label class="label" for="user">Username</label>
-				<input type="text" class="input w-full max-w-xs" id="user" bind:value={username} />
+				<input type="text" class="input w-full" id="user" bind:value={username} />
 
-				<label class="label" for="pwd">Password </label>
+				<label class="label" for="pwd">Password</label>
 				<InputPassword id="pwd" bind:value={password} />
 
-				<div class="card-actions mt-4 justify-end">
-				<!-- Botão voltar-->
-					<a class="bnt btn-neutral inline-flex items-center" href="/"><span>Voltar</span></a>
+				<div class="card-actions mt-4 justify-between items-center">
+					<!-- Botão voltar -->
+					<a class="btn btn-neutral btn-sm sm:btn-md inline-flex items-center" href="/"><span>Voltar</span></a>
 
 					<button
-						class="btn btn-primary inline-flex items-center"
-						onclick={() => {
-							signInUser({ username: username, password: password });
-						}}><Login class="mr-2 h-5 w-5" /><span>Login</span></button
+						class="btn btn-primary btn-sm sm:btn-md inline-flex items-center"
+						type="submit"
 					>
+						<Login class="mr-2 h-5 w-5" />
+						<span>Login</span>
+					</button>
 				</div>
 			</form>
 		</div>

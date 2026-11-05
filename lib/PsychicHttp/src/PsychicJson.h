@@ -58,6 +58,14 @@ class PsychicJsonResponse : public PsychicResponse
 
     JsonVariant &getRoot();
     size_t getLength();
+
+    #if ARDUINOJSON_VERSION_MAJOR >= 7
+      bool overflowed() const { return _jsonBuffer.overflowed(); }
+      const JsonDocument& getDocument() const { return _jsonBuffer; }
+      JsonDocument& getDocument() { return _jsonBuffer; }
+    #else
+      bool overflowed() const { return false; }
+    #endif
     
     virtual esp_err_t send() override;
 };

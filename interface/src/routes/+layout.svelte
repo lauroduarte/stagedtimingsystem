@@ -2,13 +2,14 @@
 	import type { LayoutData } from './$types';
 	import { onDestroy, onMount } from 'svelte';
 	import { user } from '$lib/stores/user';
+	import { setUser } from '$lib/services/services';
 	import { telemetry } from '$lib/stores/telemetry';
 	import { analytics } from '$lib/stores/analytics';
 	import { batteryHistory } from '$lib/stores/battery';
 	import { socket } from '$lib/stores/socket';
 	import type { userProfile } from '$lib/stores/user';
 	import { page } from '$app/state';
-	import { Modals, modals } from 'svelte-modals';
+	import { Modals } from 'svelte-modals';
 	import Toast from '$lib/components/toasts/Toast.svelte';
 	import { notifications } from '$lib/components/toasts/notifications';
 	import { fade } from 'svelte/transition';
@@ -25,7 +26,14 @@
 
 	let { data, children }: Props = $props();
 
+	setUser($user);
+
+	$effect(() => {
+		setUser($user);
+	});
+
 	onMount(async () => {
+		addEventListeners();
 		if ($user.bearer_token !== '') {
 			await validateUser($user);
 		}
@@ -40,7 +48,6 @@
 			`ws://${window.location.host}/ws/events${ws_token}`,
 			page.data.features.event_use_json
 		);
-		addEventListeners();
 	};
 
 	onDestroy(() => {
@@ -62,6 +69,7 @@
 		socket.off('analytics', handleAnalytics);
 		socket.off('open', handleOpen);
 		socket.off('close', handleClose);
+		socket.off('error', handleError);
 		socket.off('rssi', handleNetworkStatus);
 		socket.off('notification', handleNotification);
 		socket.off('battery', handleBattery);
@@ -125,25 +133,24 @@
 	};
 
 	const handleOAT = (data: DownloadOTA) => telemetry.setDownloadOTA(data);
-
 </script>
 
 <svelte:head>
 	<title>{page.data.title}</title>
 </svelte:head>
 
-	<div class="drawer lg:drawer-open">
-		<div class="drawer-content flex flex-col">
-			<!-- Main page content here -->
-			{@render children?.()}
-		</div>
+<div class="drawer lg:drawer-open">
+	<div class="drawer-content flex flex-col">
+		<!-- Main page content here -->
+		{@render children?.()}
 	</div>
-
+</div>
 
 <Modals>
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	{#snippet backdrop({ close })}
 		<div
+			role="presentation"
 			class="fixed inset-0 z-40 max-h-full max-w-full bg-black/20 backdrop-blur-sm"
 			transition:fade|global
 			onclick={() => close()}

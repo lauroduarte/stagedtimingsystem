@@ -27,7 +27,7 @@
 	import type { SystemInformation, Analytics } from '$lib/types/models';
 	import { socket } from '$lib/stores/socket';
 
-	let systemInformation: SystemInformation = $state();
+	let systemInformation: SystemInformation = $state()!;
 
 	async function getSystemStatus() {
 		try {
@@ -53,7 +53,7 @@
 		(systemInformation = { ...systemInformation, ...data });
 
 	async function postRestart() {
-		const response = await fetch('/rest/restart', {
+		await fetch('/rest/restart', {
 			method: 'POST',
 			headers: {
 				Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic'
@@ -77,7 +77,7 @@
 	}
 
 	async function postFactoryReset() {
-		const response = await fetch('/rest/factoryReset', {
+		await fetch('/rest/factoryReset', {
 			method: 'POST',
 			headers: {
 				Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic'
@@ -101,7 +101,7 @@
 	}
 
 	async function postSleep() {
-		const response = await fetch('/rest/sleep', {
+		await fetch('/rest/sleep', {
 			method: 'POST',
 			headers: {
 				Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic'
@@ -125,17 +125,14 @@
 	}
 
 	function convertSeconds(seconds: number) {
-		// Calculate the number of seconds, minutes, hours, and days
 		let minutes = Math.floor(seconds / 60);
 		let hours = Math.floor(minutes / 60);
 		let days = Math.floor(hours / 24);
 
-		// Calculate the remaining hours, minutes, and seconds
 		hours = hours % 24;
 		minutes = minutes % 60;
 		seconds = seconds % 60;
 
-		// Create the formatted string
 		let result = '';
 		if (days > 0) {
 			result += days + ' day' + (days > 1 ? 's' : '') + ' ';

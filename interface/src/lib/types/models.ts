@@ -6,6 +6,10 @@ export type Prova = {
 	nome: string;
 	data: string;
 	local: string;
+	tipo?: string; // 'especial' | 'laps'
+	modoVoltas?: string; // 'unica' | 'duas'
+	criterioVoltas?: string; // 'voltas_tempo' | 'melhor_volta'
+	totalEstagios?: number;
 }
 
 export type WifiStatus = {
@@ -180,7 +184,180 @@ export type RFIDCard = {
 
 export type Cronometrar = {
 	cronometrar: boolean;
-	tipo: string; // 'especial' | 'laps
+	tipo: string; // 'especial' | 'laps'
+	modoVoltas?: string; // 'unica' | 'duas'
 	especial: string;
 	posicao: string; // 'inicio' | 'fim'
+	intervaloMinVoltaSegundos?: number;
 }
+
+export type CronometragemItem = {
+	uid: string;
+	numeral?: number;
+	tipo?: string;
+	modoVoltas?: string;
+	especial: string;
+	volta?: number;
+	inicio: string;
+	fim: string;
+	duracao?: string;
+	duracaoSegundos?: number;
+	status?: string;
+	incompleto?: boolean;
+}
+
+export type SyncDiagnostico = {
+	totalRegistros: number;
+	concluidos: number;
+	pendentesChegada: number;
+	semLargada: number;
+	invalidos: number;
+};
+
+export type SyncConflito = {
+	uid: string;
+	numeral: number;
+	especial: string;
+	campo: string;
+	valorLocal: string;
+	valorRemoto: string;
+};
+
+export type SyncStatusResponse = {
+	status: string;
+	versao?: number;
+	relogio: string;
+	unixtime?: number;
+	prova?: string;
+	tipoProva?: string;
+	modoVoltas?: string;
+	criterioVoltas?: string;
+	totalEstagios?: number;
+	cronometrando?: boolean;
+	tipoEstacao?: string;
+	especial?: string;
+	posicao?: string;
+	categorias?: number;
+	atletas?: number;
+	cartoes?: number;
+	registros?: number;
+	diagnostico?: SyncDiagnostico;
+};
+
+export type SyncConfigPackage = {
+	versao?: number;
+	relogio?: {
+		datetime: string;
+		unixtime?: number;
+		offsetSeconds?: number;
+	};
+	prova?: Prova;
+	categorias?: Categoria[];
+	atletas?: Atleta[];
+	rfid?: {
+		cards: RFIDCard[];
+	};
+	cronometrar?: Cronometrar;
+	ajustarRelogio?: boolean;
+};
+
+export type SyncConfigResponse = {
+	status: string;
+	provaSincronizada: boolean;
+	categoriasSincronizadas: number;
+	atletasSincronizados: number;
+	cartoesSincronizados: number;
+	relogioAjustado: boolean;
+	horarioAtual: string;
+	mensagem?: string;
+};
+
+export type SyncResultadosPackage = {
+	versao?: number;
+	relogio?: {
+		datetime: string;
+		unixtime?: number;
+	};
+	prova?: Prova;
+	estacao?: Cronometrar;
+	diagnostico?: SyncDiagnostico;
+	cronometragem: CronometragemItem[];
+};
+
+export type SyncResultadosMergeResponse = {
+	status: string;
+	recebidos: number;
+	inseridos: number;
+	conciliados: number;
+	duplicadosIgnorados: number;
+	conflitosDetectados: number;
+	totalConsolidado: number;
+	diagnostico: SyncDiagnostico;
+	conflitos: SyncConflito[];
+	mensagem?: string;
+};
+
+export type CriterioVoltas = 'voltas_tempo' | 'melhor_volta';
+
+export type SituacaoPiloto = 'CLASSIFICADO' | 'EM_CURSO' | 'DNF' | 'DNS';
+
+export type StatusResultadoProva = 'oficial' | 'parcial' | 'aguardando';
+
+export type EtapaApurada = {
+	codigo: string;
+	indice: number;
+	inicio: string;
+	fim: string;
+	duracao: string;
+	duracaoSegundos: number;
+	status: string; // 'OK' | 'largada' | 'sem_largada' | 'invalido' | 'pendente'
+	posicaoEtapa: number;
+	gapEtapa: string;
+};
+
+export type PilotoApurado = {
+	numeral: number;
+	nome: string;
+	equipe: string;
+	categoriaId: number;
+	categoriaNome: string;
+	uid: string;
+	situacao: SituacaoPiloto;
+	etapasConcluidas: number;
+	etapasEsperadas: number;
+	voltasConcluidas: number;
+	tempoTotalSegundos: number;
+	tempoTotal: string;
+	melhorVoltaSegundos: number;
+	melhorVolta: string;
+	posicaoGeral: number;
+	gapGeral: string;
+	posicaoCategoria: number;
+	gapCategoria: string;
+	horarioLargadaInicial: string;
+	etapas: EtapaApurada[];
+};
+
+export type RelatorioResultadosPublicos = {
+	versao?: number;
+	resultadoOficial: boolean;
+	statusResultado: StatusResultadoProva;
+	modoProva: string; // 'especial' | 'laps'
+	modoVoltas: string; // 'unica' | 'duas'
+	criterioVoltas: CriterioVoltas;
+	totalEstagiosConfigurados: number;
+	totalEtapasDisputadas: number;
+	relogio?: {
+		datetime: string;
+		unixtime?: number;
+	};
+	prova?: Prova;
+	estacao?: Cronometrar;
+	diagnostico: SyncDiagnostico;
+	codigosEtapas: string[];
+	categorias: Categoria[];
+	classificacao: PilotoApurado[];
+	cronometragem: CronometragemItem[];
+};
+
+

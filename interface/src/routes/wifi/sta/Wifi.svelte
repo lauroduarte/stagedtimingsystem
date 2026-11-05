@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { modals } from 'svelte-modals';
 	import { slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
@@ -48,8 +48,8 @@
 	let newNetwork: boolean = $state(true);
 	let showNetworkEditor: boolean = $state(false);
 
-	let wifiStatus: WifiStatus = $state();
-	let wifiSettings: WifiSettings = $state();
+	let wifiStatus: WifiStatus = $state()!;
+	let wifiSettings: WifiSettings = $state()!;
 
 	let showWifiDetails = $state(false);
 
@@ -310,8 +310,8 @@
 		console.log(wifiSettings.wifi_networks);
 	}
 
-	function preventDefault(fn) {
-		return function (event) {
+	function preventDefault(fn: (event: Event) => void) {
+		return function (this: unknown, event: Event) {
 			event.preventDefault();
 			fn.call(this, event);
 		};
@@ -517,7 +517,7 @@
 							itemCount={wifiSettings.wifi_networks.length}
 							on:drop={onDrop}
 						>
-							{#snippet children({ index })}
+							{#snippet children({ index }: { index: number })}
 								<!-- svelte-ignore a11y_click_events_have_key_events -->
 								<div class="rounded-box bg-base-100 flex items-center space-x-3 px-4 py-2">
 									<div class="mask mask-hexagon bg-primary h-auto w-10 shrink-0">

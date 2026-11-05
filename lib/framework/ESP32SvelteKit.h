@@ -87,7 +87,7 @@ enum class ConnectionStatus
 class ESP32SvelteKit
 {
 public:
-    ESP32SvelteKit(PsychicHttpServer *server, unsigned int numberEndpoints = 115);
+    ESP32SvelteKit(PsychicHttpServer *server, unsigned int numberEndpoints = 60);
 
     void begin();
 

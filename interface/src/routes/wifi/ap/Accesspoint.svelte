@@ -8,15 +8,14 @@
 	import { page } from '$app/state';
 	import { notifications } from '$lib/components/toasts/notifications';
 	import Spinner from '$lib/components/Spinner.svelte';
-	import Collapsible from '$lib/components/Collapsible.svelte';
 	import AP from '~icons/tabler/access-point';
 	import MAC from '~icons/tabler/dna-2';
 	import Home from '~icons/tabler/home';
 	import Devices from '~icons/tabler/devices';
 	import type { ApSettings, ApStatus } from '$lib/types/models';
 
-	let apSettings: ApSettings = $state();
-	let apStatus: ApStatus = $state();
+	let apSettings: ApSettings = $state()!;
+	let apStatus: ApStatus = $state()!;
 
 	let formField: any = $state();
 
@@ -178,8 +177,8 @@
 		}
 	}
 
-	function preventDefault(fn) {
-		return function (event) {
+	function preventDefault(fn: (event: Event) => void) {
+		return function (this: unknown, event: Event) {
 			event.preventDefault();
 			fn.call(this, event);
 		};

@@ -1,4 +1,4 @@
-import type { UserConfig, Plugin } from 'vite';
+import type { Plugin } from 'vite';
 
 export default function viteLittleFS(): Plugin[] {
 	return [
@@ -8,25 +8,41 @@ export default function viteLittleFS(): Plugin[] {
 			apply: 'build',
 
 			async config(config, _configEnv) {
-				const { assetFileNames, chunkFileNames, entryFileNames } =
-					config.build?.rollupOptions?.output;
+				if (!config.build) {
+					config.build = {};
+				}
+				if (!config.build.rollupOptions) {
+					config.build.rollupOptions = {};
+				}
 
-        // Handle Server-build + Client Assets
-        config.build.rollupOptions.output = {
-          ...config.build?.rollupOptions?.output,
-          assetFileNames: assetFileNames.replace('.[hash]', '')
-        }
+				const output = config.build.rollupOptions.output;
+				if (!output || Array.isArray(output)) {
+					return;
+				}
 
-        // Handle Client-build
-        if (config.build?.rollupOptions?.output.chunkFileNames.includes('hash')) {
+				const { assetFileNames, chunkFileNames, entryFileNames } = output;
 
-          config.build.rollupOptions.output = {
-            ...config.build?.rollupOptions?.output,
-            chunkFileNames: chunkFileNames.replace('.[hash]', ''),
-            entryFileNames: entryFileNames.replace('.[hash]', ''),
-          }
-        }
-      }
-    }
-  ]
+				// Handle Server-build + Client Assets
+				config.build.rollupOptions.output = {
+					...output,
+					assetFileNames:
+						typeof assetFileNames === 'string'
+							? assetFileNames.replace('.[hash]', '')
+							: assetFileNames
+				};
+
+				// Handle Client-build
+				if (typeof chunkFileNames === 'string' && chunkFileNames.includes('hash')) {
+					config.build.rollupOptions.output = {
+						...config.build.rollupOptions.output,
+						chunkFileNames: chunkFileNames.replace('.[hash]', ''),
+						entryFileNames:
+							typeof entryFileNames === 'string'
+								? entryFileNames.replace('.[hash]', '')
+								: entryFileNames
+					};
+				}
+			}
+		}
+	];
 }

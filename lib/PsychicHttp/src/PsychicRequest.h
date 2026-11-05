@@ -73,6 +73,7 @@ class PsychicRequest {
     const String contentType(); // returns the Content-Type header value
     size_t contentLength();     // returns the Content-Length header value
     const String& body();       // returns the body of the request
+    void clearBody() { _body = String(); }
     const ContentDisposition getContentDisposition();
 
     const String& queryString() { return query(); }  //compatability function.  same as query()

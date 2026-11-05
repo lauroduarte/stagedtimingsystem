@@ -11,10 +11,7 @@ ProvaService::ProvaService(PsychicHttpServer *server,
                                                              AuthenticationPredicates::IS_AUTHENTICATED),
                                                 _fsPersistence(Prova::read, Prova::update, this, sveltekit->getFS(), "/config/prova.json")
 {
-    // configure led to be output
-    pinMode(LED_BUILTIN, OUTPUT);
-
-    // configure settings service update handler to update LED state
+    // configure settings service update handler
     addUpdateHandler([&](const String &originId)
                      { onConfigUpdated(); },
                      false);

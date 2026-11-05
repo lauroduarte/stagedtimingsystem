@@ -9,9 +9,6 @@
 	let { data }: Props = $props();
 </script>
 
-<div
-	class="mx-0 my-1 flex flex-col space-y-4
-     sm:mx-8 sm:my-8"
->
+<div class="w-full min-w-0 max-w-5xl mx-auto px-1 sm:px-4 py-2 sm:py-6 space-y-4 sm:space-y-6">
 	<Reset />
 </div>

@@ -16,10 +16,18 @@ from pathlib import Path
 from shutil import copytree, rmtree, copyfileobj
 from os.path import exists, getmtime
 import os
+import sys
+import subprocess
 import gzip
+import hashlib
 import mimetypes
 import glob
 from datetime import datetime
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 Import("env")
 
@@ -75,12 +83,31 @@ def get_package_manager():
         return "npm"
 
 
+def run_safe_cmd(cmd):
+    proc = subprocess.Popen(
+        cmd,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.stdout:
+        for line in proc.stdout:
+            safe_line = line.encode("ascii", errors="replace").decode("ascii", errors="replace")
+            sys.stdout.write(safe_line)
+    rc = proc.wait()
+    if rc != 0:
+        raise RuntimeError(f"Command '{cmd}' failed with exit code {rc}")
+
+
 def build_webapp():
     if package_manager := get_package_manager():
         print(f"Building interface with {package_manager}")
         os.chdir(interface_dir)
-        env.Execute(f"{package_manager} install")
-        env.Execute(f"{package_manager} run build")
+        run_safe_cmd(f"{package_manager} install")
+        run_safe_cmd(f"{package_manager} run build")
         os.chdir("..")
     else:
         raise Exception(
@@ -98,13 +125,24 @@ def embed_webapp():
 
 def build_progmem():
     mimetypes.init()
-    with open(output_file, "w") as progmem:
+    mimetypes.add_type("application/javascript", ".js")
+    mimetypes.add_type("text/css", ".css")
+    mimetypes.add_type("image/png", ".png")
+    mimetypes.add_type("application/json", ".json")
+    mimetypes.add_type("image/x-icon", ".ico")
+    mimetypes.add_type("image/svg+xml", ".svg")
+    mimetypes.add_type("text/html", ".html")
+
+    files = sorted(Path(build_dir).rglob("*.*"))
+    asset_list = []
+
+    with open(output_file, "w", encoding="utf-8") as progmem:
+        progmem.write("#pragma once\n")
         progmem.write("#include <functional>\n")
         progmem.write("#include <Arduino.h>\n")
+        progmem.write("#include <cstring>\n\n")
 
-        assetMap = {}
-
-        for idx, path in enumerate(Path(build_dir).rglob("*.*")):
+        for idx, path in enumerate(files):
             asset_path = path.relative_to(build_dir).as_posix()
             asset_mime = (
                 mimetypes.guess_type(asset_path)[0] or "application/octet-stream"
@@ -113,7 +151,7 @@ def build_progmem():
 
             asset_var = f"ESP_SVELTEKIT_DATA_{idx}"
             progmem.write(f"// {asset_path}\n")
-            progmem.write(f"const uint8_t {asset_var}[] = {{\n\t")
+            progmem.write(f"const uint8_t {asset_var}[] PROGMEM = {{\n\t")
             file_data = gzip.compress(path.read_bytes())
 
             for i, byte in enumerate(file_data):
@@ -122,27 +160,63 @@ def build_progmem():
                 progmem.write(f"0x{byte:02X},")
 
             progmem.write("\n};\n\n")
-            assetMap[asset_path] = {
+
+            etag = hashlib.md5(file_data).hexdigest()[:16]
+
+            asset_list.append({
+                "uri": f"/{asset_path}",
                 "name": asset_var,
                 "mime": asset_mime,
                 "size": len(file_data),
-            }
+                "etag": etag,
+            })
+
+        progmem.write("struct StaticAsset {\n")
+        progmem.write("    const char* uri;\n")
+        progmem.write("    const char* contentType;\n")
+        progmem.write("    const uint8_t* data;\n")
+        progmem.write("    size_t size;\n")
+        progmem.write("    const char* etag;\n")
+        progmem.write("};\n\n")
+
+        progmem.write("static const StaticAsset staticAssets[] PROGMEM = {\n")
+        for asset in asset_list:
+            progmem.write(
+                f'    {{"{asset["uri"]}", "{asset["mime"]}", {asset["name"]}, {asset["size"]}, "\\"{asset["etag"]}\\""}},\n'
+            )
+        progmem.write("};\n\n")
 
         progmem.write(
             "typedef std::function<void(const String& uri, const String& contentType, const uint8_t * content, size_t len)> RouteRegistrationHandler;\n\n"
         )
         progmem.write("class WWWData {\n")
-        progmem.write("\tpublic:\n")
-        progmem.write(
-            "\t\tstatic void registerRoutes(RouteRegistrationHandler handler) {\n"
-        )
+        progmem.write("    public:\n")
+        progmem.write(f"        static constexpr size_t staticAssetsCount = {len(asset_list)};\n\n")
+        progmem.write("        static const StaticAsset* findAsset(const char* uri) {\n")
+        progmem.write("            if (!uri || uri[0] == '\\0') {\n")
+        progmem.write("                return nullptr;\n")
+        progmem.write("            }\n")
+        progmem.write("            for (size_t i = 0; i < staticAssetsCount; ++i) {\n")
+        progmem.write("                if (strcmp(staticAssets[i].uri, uri) == 0) {\n")
+        progmem.write("                    return &staticAssets[i];\n")
+        progmem.write("                }\n")
+        progmem.write("            }\n")
+        progmem.write("            return nullptr;\n")
+        progmem.write("        }\n\n")
 
-        for asset_path, asset in assetMap.items():
-            progmem.write(
-                f'\t\t\thandler("/{asset_path}", "{asset["mime"]}", {asset["name"]}, {asset["size"]});\n'
-            )
+        index_pos = next((i for i, a in enumerate(asset_list) if a["uri"] == "/index.html"), -1)
+        progmem.write("        static const StaticAsset* getIndexAsset() {\n")
+        if index_pos >= 0:
+            progmem.write(f"            return &staticAssets[{index_pos}];\n")
+        else:
+            progmem.write("            return nullptr;\n")
+        progmem.write("        }\n\n")
 
-        progmem.write("\t\t}\n")
+        progmem.write("        static void registerRoutes(RouteRegistrationHandler handler) {\n")
+        progmem.write("            for (size_t i = 0; i < staticAssetsCount; ++i) {\n")
+        progmem.write("                handler(staticAssets[i].uri, staticAssets[i].contentType, staticAssets[i].data, staticAssets[i].size);\n")
+        progmem.write("            }\n")
+        progmem.write("        }\n")
         progmem.write("};\n\n")
 
 

@@ -17,8 +17,8 @@
 
 	let { update = $bindable(false) }: Props = $props();
 
-	let firmwareVersion: string;
-	let firmwareDownloadLink: string;
+	let firmwareVersion = $state('');
+	let firmwareDownloadLink = $state('');
 
 	async function getGithubAPI() {
 		const githubUrl = `https://api.github.com/repos/${page.data.github}/releases/latest`;
@@ -60,7 +60,7 @@
 
 	async function postGithubDownload(url: string) {
 		try {
-			const apiResponse = await fetch('/rest/downloadUpdate', {
+			await fetch('/rest/downloadUpdate', {
 				method: 'POST',
 				headers: {
 					Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
@@ -76,7 +76,7 @@
 	onMount(() => {
 		if (page.data.features.download_firmware && (!page.data.features.security || $user.admin)) {
 			getGithubAPI();
-			const interval = setInterval(
+			setInterval(
 				async () => {
 					getGithubAPI();
 				},

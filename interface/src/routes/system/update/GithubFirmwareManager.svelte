@@ -14,7 +14,6 @@
 	import Error from '~icons/tabler/circle-x';
 	import { compareVersions } from 'compare-versions';
 	import GithubUpdateDialog from '$lib/components/GithubUpdateDialog.svelte';
-	import { assets } from '$app/paths';
 	import InfoDialog from '$lib/components/InfoDialog.svelte';
 	import Check from '~icons/tabler/check';
 
@@ -40,7 +39,7 @@
 
 	async function postGithubDownload(url: string) {
 		try {
-			const apiResponse = await fetch('/rest/downloadUpdate', {
+			await fetch('/rest/downloadUpdate', {
 				method: 'POST',
 				headers: {
 					Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
@@ -87,7 +86,7 @@
 			onConfirm: () => {
 				postGithubDownload(url);
 				modals.open(GithubUpdateDialog, {
-					onConfirm: () => modals.closeAlls()
+					onConfirm: () => modals.closeAll()
 				});
 			}
 		});
@@ -96,10 +95,10 @@
 
 <SettingsCard collapsible={false}>
 	{#snippet icon()}
-		<Github  class="lex-shrink-0 mr-2 h-6 w-6 self-end rounded-full" />
+		<Github class="lex-shrink-0 mr-2 h-6 w-6 self-end rounded-full" />
 	{/snippet}
 	{#snippet title()}
-		<span >Github Firmware Manager</span>
+		<span>Github Firmware Manager</span>
 	{/snippet}
 	{#await getGithubAPI()}
 		<Spinner />

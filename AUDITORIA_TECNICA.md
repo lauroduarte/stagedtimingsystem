@@ -125,7 +125,7 @@ graph TB
 | **Cadastro de Categorias** | Parcialmente implementada | [CategoriaService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CategoriaService.h), [CategoriaService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CategoriaService.cpp), [Categoria.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/categoria/Categoria.svelte) | CRUD completo via array em `/rest/categoria` e `/config/categoria.json`. | Uso de métodos legados ArduinoJson 6 (`createNestedArray`); `$derived` no Svelte 5 usado incorretamente como closure. | P2 |
 | **Cadastro de Atletas** | Implementação suspeita | [AtletaService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/AtletaService.h), [AtletaService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/AtletaService.cpp), [Atleta.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/atleta/Atleta.svelte) | Cadastro com nome, equipe, numeral e categoriaId. | Botão de exclusão no frontend passa `atleta.numeral` (input form) em vez de `item.numeral` (linha clicada); acionamento espúrio de `pinMode(LED_BUILTIN)`. | P1 |
 | **Relógio RTC DS3231** | Implementação suspeita | [RelogioService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.h), [RelogioService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.cpp), [Relogio.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/relogio/Relogio.svelte) | Leitura e ajuste de DS3231 via I2C e `/rest/relogio`. | RTC não sincroniza `settimeofday` do sistema ESP32; falha de inicialização não permite retry; frontend sem `$state()`. | P1 |
-| **Reset e Registro de Tags RFID** | Parcialmente implementada | [RFIDService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.h), [RFIDService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp), [Reset.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/reset/Reset.svelte) | `/rest/rfid/start_reset`, limpeza de setores e notificação via WebSocket. | Ponteiro `_display` nulo no construtor; mutação de `_state` fora de mutex em `handleStartReset`; nomes de pinos SPI invertidos. | P1 |
+| **Reset e Registro de Tags RFID** | Parcialmente implementada | [RFIDService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.h), [RFIDService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp), [Reset.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/reset/Reset.svelte) | `/rest/rfid/start_reset`, limpeza de setores e notificação via WebSocket. | Ponteiro `_display` nulo no construtor; nomes de pinos SPI invertidos (concorrência em `_state` resolvida no BUG-14). | P1 |
 | **Tomada de Tempo (Cronometrar)** | Implementação suspeita | [CronometrarService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometrarService.h), [CronometrarService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometrarService.cpp), [Cronometrar.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/cronometrar/Cronometrar.svelte) | Lógica de início/fim de especial com gravação em blocos do cartão. | **Não instanciado no `main.cpp`**; leitura/escrita do cartão sem autenticação de setor; ponteiros de display e buzzer nulos; botão com rótulo invertido. | P0 |
 | **Log de Passagens (Cronometragem)** | Parcialmente implementada | [CronometragemService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometragemService.h), [CronometragemService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometragemService.cpp) | Estrutura para salvar `uid`, `especial`, `inicio`, `fim` em LittleFS. | **Não instanciado no `main.cpp`**; sintaxe inválida de ArduinoJson em `createNestedObject("cronometragem")`; sem interface web dedicada para visualização. | P1 |
 | **Feedback Visual (TM1637)** | Implementação suspeita | [DisplayService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/DisplayService.h), [DisplayService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/DisplayService.cpp), [TM1637Display.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/TM1637Display.cpp) | Funções para exibir relógio, contagem de tags, "GO" piscando e "FIN". | Pinos GPIO 1 e GPIO 2 em conflito com UART0 e Boot Strapping; delays bloqueantes de até 2 segundos congelando o loop do sistema. | P0 |
@@ -220,16 +220,23 @@ graph TB
 ---
 
 ### [BUG-07] [P1] Delays Bloqueantes no DisplayService e no Loop do RFID
-- **Localização:** [DisplayService.cpp:L53](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/DisplayService.cpp#L53), [DisplayService.cpp:L69](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/DisplayService.cpp#L69) e [RFIDService.cpp:L157](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp#L157)
-- **Descrição Técnica:** O método `showFin(2000)` realiza um `delay(durationMs)` bloqueante de 2000 ms (2 segundos). O método `showGoBlinking(2000, 400)` executa um laço `while` que consome 2 segundos com chamadas `delay(blinkRateMs)`. O loop de RFID é chamado dentro da tarefa `ESP32 SvelteKit Loop` no **Core 0**, compartilhada com a máquina de estados de conexão Wi-Fi e WebSocket.
-- **Cenário de Falha:** Quando um atleta atinge a chegada, a task fica paralisada por 2 segundos. Conexões de clientes web sofrem timeout de keep-alive, requisições HTTP entrantes são enfileiradas ou descartadas, e o Task Watchdog Timer (TWDT) do ESP-IDF pode disparar se o bloqueio se somar a outros processos lentos.
+- **Status:** **Resolvido**
+- **Localização:** [DisplayService.cpp:L53](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/DisplayService.cpp#L53), [DisplayService.cpp:L69](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/DisplayService.cpp#L69) e [RFIDService.cpp:L175](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp#L175)
+- **Descrição Técnica:** O método `showFin(2000)` realizava um `delay(durationMs)` bloqueante de 2000 ms (2 segundos). O método `showGoBlinking(2000, 400)` executava um laço `while` que consumia 2 segundos com chamadas `delay(blinkRateMs)`. O loop de RFID possuía chamada incondicional a `delay(10)`. Todos executados dentro da tarefa `ESP32 SvelteKit Loop` no **Core 0**, compartilhada com a máquina de estados de conexão Wi-Fi e WebSocket.
+- **Cenário de Falha:** Quando um atleta atinge a chegada, a task ficava paralisada por 2 segundos. Conexões de clientes web sofriam timeout de keep-alive, requisições HTTP entrantes eram enfileiradas ou descartadas, e o Task Watchdog Timer (TWDT) do ESP-IDF podia disparar se o bloqueio se somasse a outros processos lentos.
 - **Consequência:** Travamento periódico da interface web e latência inaceitável na detecção de atletas que passem em fila no leitor.
 - **Grau de Confiança:** 100%.
-- **Correção Sugerida:** Refatorar as animações do display para operarem de forma não-bloqueante baseadas em `millis()`, ou despachar os efeitos visuais para uma FreeRTOS task separada desacoplada do loop de rede.
+- **Correção Aplicada:** 
+  1. Refatoração completa de `DisplayService` para animações assíncronas baseadas em máquina de estados e temporização com `millis()`. As funções `showGoBlinking` e `showFin` configuram os parâmetros e renderizam o primeiro frame imediatamente sem qualquer atraso bloqueante.
+  2. Implementação do método `DisplayService::loop()` integrado cooperativamente via `esp32sveltekit.addLoopFunction` no `main.cpp`, responsável pelo avanço suave do estado e controle de piscar/encerramento da animação.
+  3. Adição de métodos `stopAnimation()`, `isAnimating()` e proteção para não sobrescrever animações transitórias em `showClock()` e `showElapsedTime()`.
+  4. Remoção do `delay(10)` bloqueante no início de `RFIDService::loop()`, mantendo apenas `yield()` para cessão cooperativa.
+
 
 ---
 
 ### [BUG-08] [P1] Exclusão de Atleta Apontando para o Formulário em vez da Linha
+- **Status:** **Resolvido**
 - **Localização:** [Atleta.svelte:L106](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/atleta/Atleta.svelte#L106)
 - **Descrição Técnica:** Na tabela de listagem de atletas, a iteração é feita com `{#each atletas as item}`. No botão da lixeira para exclusão, o código implementa:
   ```svelte
@@ -240,11 +247,16 @@ graph TB
 - **Consequência:** Impossibilidade de excluir o atleta desejado; exclusão indevida de dados arbitrários.
 - **Grau de Confiança:** 100%.
 - **Correção Sugerida:** Alterar o parâmetro para `remover(item.numeral)`.
+- **Correção Aplicada:**
+  1. No template de listagem em [Atleta.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/atleta/Atleta.svelte), alterada a ação de clique do botão para `on:click={() => remover(item.numeral)}`, garantindo que o numeral correto da linha iterada seja passado à rotina de exclusão.
+  2. Corrigido o `aria-label` de acessibilidade para `"Remover atleta"`.
+  3. Fechada adequadamente a tag `</td>` da coluna de categorias e adicionado o header vazio `<th class="py-2 px-4 border-b"></th>` na `thead` para balanceamento semântico da tabela.
 
 ---
 
 ### [BUG-09] [P1] Inversão Lógica no Botão Iniciar/Parar e Dessincronização de Estado em Cronometrar.svelte
-- **Localização:** [Cronometrar.svelte:L33-L37](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/cronometrar/Cronometrar.svelte#L33-L37) e [Cronometrar.svelte:L92-L96](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/cronometrar/Cronometrar.svelte#L92-L96)
+- **Status:** **Resolvido**
+- **Localização:** [Cronometrar.svelte:L33-L37](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/cronometrar/Cronometrar.svelte#L33-L37), [Cronometrar.svelte:L92-L96](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/cronometrar/Cronometrar.svelte#L92-L96) e [CronometrarService.h:L38-L41](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometrarService.h#L38-L41)
 - **Descrição Técnica:** 
   1. No template HTML do botão:
      ```svelte
@@ -260,29 +272,45 @@ graph TB
 - **Cenário de Falha:** O operador clica no botão acreditando estar ativando a cronometragem, mas o firmware permanece inativo. A alteração de "Início" para "Fim" não é gravada se o botão não mudar de estado.
 - **Consequência:** Comportamento errático e perda de controle da operação pelo usuário.
 - **Grau de Confiança:** 100%.
-- **Correção Sugerida:** Inverter o estado booleano explicitamente antes do envio HTTP, sincronizar a resposta direta do servidor e corrigir a condição do rótulo no template HTML.
+- **Correção Aplicada:**
+  1. Em `Cronometrar.svelte`: implementada a alternância explícita de estado no disparo (`const payload = { ...cronometrar, cronometrar: !cronometrar.cronometrar }`) antes do envio HTTP via `salvarCronometrar`, e sincronização do estado `cronometrar` diretamente a partir da resposta retornada pelo backend (sem mutação assíncrona desacoplada).
+  2. No template HTML de `Cronometrar.svelte`: corrigido o rótulo e o estilo do botão para indicar "Parar" (vermelho com indicador pulsante) quando ativo e "Iniciar" (azul) quando inativo. Adicionado badge de status em tempo real da estação e botão dedicado para "Salvar Configurações" sem alternar o estado de execução. Corrigido `label for="tipo"`.
+  3. No firmware (`CronometrarService.h`): refatorado o método `Cronometrar::update` para validar e comparar todos os campos (`cronometrar`, `tipo`, `especial`, `posicao`), retornando `StateUpdateResult::CHANGED` sempre que qualquer propriedade for modificada, evitando descartes indevidos. Atualizada a verificação para sintaxe compatível e sem avisos de depreciação do ArduinoJson 7. Compilação C++ e verificação Svelte validadas com sucesso.
 
 ---
 
 ### [BUG-10] [P2] Perda de Reatividade com Variáveis sem `$state` no Svelte 5
+- **Status:** **Resolvido**
 - **Localização:** [Prova.svelte:L12](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/prova/Prova.svelte#L12) e [Relogio.svelte:L12](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/relogio/Relogio.svelte#L12)
 - **Descrição Técnica:** Os objetos `let prova: Prova = { ... }` e `let relogio: Relogio = { ... }` foram declarados como objetos simples do TypeScript em vez de runes do Svelte 5 (`$state(...)`).
 - **Cenário de Falha:** Quando a promessa `getProva()` ou `getRelogio()` é resolvida no `onMount`, a reatribuição `prova = {...data}` não aciona re-renderização reativa na DOM. Os campos do formulário permanecem vazios ou em branco até que o usuário interaja manualmente com o campo.
 - **Consequência:** A tela não reflete as configurações já existentes no ESP32.
 - **Grau de Confiança:** 100%.
-- **Correção Sugerida:** Inicializar com `let prova = $state<Prova>({ ... })` e `let relogio = $state<Relogio>({ ... })`.
+- **Correção Aplicada:**
+  1. Em [Prova.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/prova/Prova.svelte): Inicializado `prova = $state<Prova>({ ... })`, garantindo sincronização reativa imediata dos inputs e labels quando `getProva()` é resolvido. Adicionados estados de feedback e controle de concorrência (`salvando`, `carregando`) com indicação visual no botão Salvar. Substituído o listener legado para `onclick`.
+  2. Em [Relogio.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/relogio/Relogio.svelte): Inicializado `relogio = $state<Relogio>({ ... })`, permitindo atualização imediata do valor vindo do RTC DS3231 no carregamento da tela. Adicionado o atributo `step="1"` no input `datetime-local` e normalização automática para incluir segundos (`:00`) quando necessário, atendendo à especificação estrita do `strptime` (`%Y-%m-%dT%H:%M:%S`) no firmware ESP32.
+  3. Adicionado botão utilitário "Usar Horário deste Dispositivo" em [Relogio.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/relogio/Relogio.svelte) para facilitar o acerto do RTC no campo diretamente pelo navegador/smartphone do operador. Corrigido rótulo semântico do formulário.
+  4. Validação completa com build estático do frontend Svelte 5 (`npm run build`) e compilação do firmware via PlatformIO (`pio run`), ambos concluídos com status de sucesso.
 
 ---
 
 ### [BUG-11] [P2] Inconsistência de Métodos ArduinoJson 6 e 7
-- **Localização:** [CategoriaService.h:L26-L29](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CategoriaService.h#L26-L29), [CronometragemService.h:L24-L27](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometragemService.h#L24-L27), [RFIDService.cpp:L94](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp#L94), [CronometrarService.cpp:L82](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometrarService.cpp#L82)
-- **Descrição Técnica:** O projeto especifica `ArduinoJson@>=7.0.0` no `platformio.ini`. No entanto, múltiplos pontos usam a API descontinuada da versão 6:
+- **Status:** **Resolvido**
+- **Localização:** [CategoriaService.h:L26-L50](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CategoriaService.h#L26-L50), [CronometragemService.h:L24-L50](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometragemService.h#L24-L50), [RFIDService.cpp:L113](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp#L113), [CronometrarService.cpp:L88](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometrarService.cpp#L88), [RelogioService.h:L44](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.h#L44), [CronometrarService.h:L32-L40](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometrarService.h#L32-L40)
+- **Descrição Técnica:** O projeto especifica `ArduinoJson@>=7.0.0` no `platformio.ini`. No entanto, múltiplos pontos usavam a API descontinuada da versão 6:
   - `createNestedArray()` e `createNestedObject()` em vez de `to<JsonArray>()` e `add<JsonObject>()`.
   - `DynamicJsonDocument doc(512)` em vez de `JsonDocument doc`.
-  - Em [CronometragemService.h:L27](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometragemService.h#L27), há a linha `root["cronometragem"].createNestedObject("cronometragem")`, que gera chamada inválida de método sobre array.
+  - Em [CronometragemService.h:L27](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometragemService.h#L27), havia a linha `root["cronometragem"].createNestedObject("cronometragem")`, gerando chamada inválida de método sobre array, e ausência de desserialização em `update()`.
+  - Uso de métodos descontinuados do v6 como `containsKey()` e `isNull()`.
 - **Consequência:** Avisos de compilação ou falhas graves de compilação se a biblioteca for atualizada para versões que removeram a camada de compatibilidade do v6.
 - **Grau de Confiança:** 100%.
-- **Correção Sugerida:** Migrar uniformemente todas as classes para a sintaxe do ArduinoJson v7.
+- **Correção Aplicada:**
+  1. Em [CategoriaService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CategoriaService.h): migrado `read` para `root["categorias"].to<JsonArray>()` e `categorias.add<JsonObject>()`; migrado `update` para validação com `!root["categorias"].is<JsonArray>()` e iteração limpa com `JsonVariant item : root["categorias"].as<JsonArray>()`, eliminando `createNestedArray`, `createNestedObject`, `containsKey` e `isNull()`.
+  2. Em [CronometragemService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometragemService.h): corrigida a serialização para `root["cronometragem"].to<JsonArray>()` e `cronometragens.add<JsonObject>()`. Implementada a restauração completa em `update` iterando `JsonVariant item : root["cronometragem"].as<JsonArray>()` e populando `cronometragem.cronometragens`, garantindo que os dados salvos em LittleFS (`/config/cronometragem.json`) sejam de fato carregados na inicialização do serviço.
+  3. Em [RFIDService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp): substituído `array.createNestedObject()` por `array.add<JsonObject>()` no método de parada de reset.
+  4. Em [CronometrarService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometrarService.cpp): substituído `DynamicJsonDocument doc(512)` por `JsonDocument doc`, delegando o gerenciamento dinâmico de memória à arquitetura do ArduinoJson 7.
+  5. Em [RelogioService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.h) e [CronometrarService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/CronometrarService.h): modernizadas as validações de tipos para `is<const char*>()` e `is<bool>()`, eliminando as últimas chamadas a `containsKey()` e `isNull()` em `src/`.
+  6. Compilação do firmware validada com sucesso via PlatformIO (`pio run`) com ArduinoJson 7.4.2.
 
 ---
 
@@ -297,38 +325,62 @@ graph TB
 ---
 
 ### [BUG-13] [P2] Falta de Sincronização do RTC DS3231 com o Tempo POSIX do ESP32
-- **Localização:** [RelogioService.h:L17-L57](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.h#L17-L57)
-- **Descrição Técnica:** O `RelogioService` comunica-se diretamente com o chip DS3231 via I2C ao responder ao REST endpoint, mas não chama a API POSIX `settimeofday()` para atualizar o relógio interno do ESP-IDF. Como o NTP está desativado (`FT_NTP=0`), o relógio interno do microcontrolador permanece no ano 1970.
-- **Cenário de Falha:** Logs do sistema, metadados de arquivos no LittleFS e eventuais timers dependentes do relógio padrão do C runtime permanecem com a data zerada.
+- **Status:** **Resolvido**
+- **Localização:** [RelogioService.h:L17-L65](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.h#L17-L65) e [RelogioService.cpp:L18-L23](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.cpp#L18-L23)
+- **Descrição Técnica:** O `RelogioService` comunicava-se diretamente com o chip DS3231 via I2C ao responder ao REST endpoint, mas não chamava a API POSIX `settimeofday()` para atualizar o relógio interno do ESP-IDF. Como o NTP está desativado (`FT_NTP=0`), o relógio interno do microcontrolador permanecia no ano 1970.
+- **Cenário de Falha:** Logs do sistema, metadados de arquivos no LittleFS e eventuais timers dependentes do relógio padrão do C runtime permaneciam com a data zerada.
 - **Consequência:** Dificuldade em correlacionar logs com horários reais de eventos e inconsistência de timestamps de arquivos.
 - **Grau de Confiança:** 100%.
-- **Correção Sugerida:** Chamar `settimeofday` na inicialização do RTC e após cada ajuste via `/rest/relogio`.
+- **Correção Aplicada:**
+  1. Criado o método auxiliar `Relogio::syncSystemTime(const DateTime &dt)` em [RelogioService.h](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.h), convertendo o timestamp do RTC via `dt.unixtime()` para uma estrutura `timeval` e aplicando ao relógio interno do ESP-IDF via `settimeofday(&tv, nullptr)`.
+  2. Invocado `syncSystemTime` na inicialização do RTC em `Relogio::getRTC()`, inclusive após recuperação de queda de energia (`lostPower()`), sincronizando o clock POSIX desde o boot.
+  3. Invocada a chamada a `Relogio::getRTC()` dentro de `RelogioService::begin()` em [RelogioService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RelogioService.cpp), garantindo que a inicialização do hardware I2C e a sincronização do relógio POSIX ocorram durante o `setup()` da aplicação sem depender de chamadas HTTP prévias.
+  4. Invocado `syncSystemTime` imediatamente após o ajuste do RTC no manipulador REST `Relogio::update()`.
+  5. Compilação do firmware validada com sucesso via PlatformIO (`pio run -e esp32dev`).
 
 ---
 
 ### [BUG-14] [P2] Concorrência em RFIDService::handleStartReset fora de Transação Mutex
-- **Localização:** [RFIDService.cpp:L63-L68](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp#L63-L68)
-- **Descrição Técnica:** No manipulador HTTP `handleStartReset`, a linha 63 executa `_state = RFIDState();` acessando diretamente o membro protegido da classe sem obter o mutex recursivo `_accessMutex`. Logo em seguida, chama `this->update(...)`.
-- **Cenário de Falha:** Se uma leitura de cartão estiver ocorrendo simultaneamente na tarefa de loop no Core 0 enquanto a requisição HTTP executa no contexto do servidor PsychicHttp, ocorre condição de corrida (Race Condition) na estrutura `std::map<String, int>`, podendo corromper ponteiros internos da árvore binária da STL.
-- **Consequência:** Possível corrupção de memória e reinicialização inesperada do ESP32 por Panic.
-- **Grau de Confiança:** 95%.
-- **Correção Sugerida:** Mover a redefinição de estado para dentro do lambda de `this->update()`.
+- **Status:** **Resolvido**
+- **Localização:** [RFIDService.cpp:L72-L97](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp#L72-L97) e [RFIDService.cpp:L192-L230](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp#L192-L230)
+- **Descrição Técnica:** No manipulador HTTP `handleStartReset`, o código executava `_state = RFIDState();` e lia `_state.nextIndex` acessando diretamente o membro protegido da classe sem obter o mutex recursivo `_accessMutex`. Logo em seguida, chamava `this->update(...)`.
+- **Cenário de Falha:** Se uma leitura de cartão ocorresse simultaneamente na tarefa de loop no Core 0 enquanto a requisição HTTP executava no contexto do servidor PsychicHttp, ocorria condição de corrida (Race Condition) na estrutura `std::map<String, int>`, podendo corromper ponteiros internos da árvore binária da STL. Além disso, no `RFIDService::loop()`, a limpeza de setores (`clearRFIDData()`) era executada dentro do callback de `this->read(...)`, mantendo o mutex bloqueado por dezenas de milissegundos durante transações SPI.
+- **Consequência:** Possível corrupção de memória, reinicialização inesperada do ESP32 por Panic e latência excessiva no servidor web.
+- **Grau de Confiança:** 100%.
+- **Correção Aplicada:**
+  1. Em [RFIDService.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/RFIDService.cpp): eliminada a atribuição direta `_state = RFIDState();` fora do mutex em `handleStartReset()`.
+  2. A redefinição de estado (`state = RFIDState();`) e a leitura de `nextIndex` foram movidas para dentro do lambda de `this->update()`, garantindo atomicidade e proteção total pelo mutex recursivo `_accessMutex`.
+  3. No método `RFIDService::loop()`, desacoplada a chamada I/O SPI `clearRFIDData()` do callback de leitura `this->read()`. A leitura foi simplificada para apenas verificar a existência do UID no registro de cartões sem manter o mutex ocupado durante os comandos SPI, e a inclusão do novo cartão ocorre em uma transação atômica dedicada via `this->update()`.
+  4. Firmware compilado com sucesso via PlatformIO (`pio run -e esp32dev`).
 
 ---
 
 ### [BUG-15] [P3] Código Morto e Serviços de Exemplo do Template Ativos
+- **Status:** **Resolvido**
 - **Localização:** [main.cpp:L32](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/main.cpp#L32), [main.cpp:L69](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/main.cpp#L69), `LightStateService.*`, `LightMqttSettingsService.*`, `main.cpp.txt`
-- **Descrição Técnica:** O serviço de demonstração `LightStateService` ainda é instanciado e iniciado em `main.cpp`. Os arquivos `LightMqttSettingsService` e o arquivo de rascunho `main.cpp.txt` permanecem no diretório `src/`. Múltiplos serviços de domínio contêm chamadas herdadas a `pinMode(LED_BUILTIN, OUTPUT)`.
+- **Descrição Técnica:** O serviço de demonstração `LightStateService` ainda era instanciado e iniciado em `main.cpp`. Os arquivos `LightMqttSettingsService` e o arquivo de rascunho `main.cpp.txt` permaneciam no diretório `src/`. Múltiplos serviços de domínio continham chamadas herdadas a `pinMode(LED_BUILTIN, OUTPUT)`.
 - **Consequência:** Desperdício de memória flash/RAM e ruído na leitura do código.
 - **Grau de Confiança:** 100%.
-- **Correção Sugerida:** Excluir os serviços de demonstração e remover o chaveamento do LED nos serviços de domínio.
+- **Correção Aplicada:**
+  1. Removida a instanciação e o ciclo de vida de `LightStateService` em [main.cpp](file:///c:/Users/lauro/source/repos/stagedtimingsystem/src/main.cpp).
+  2. Excluídos os arquivos de exemplo legados do template: `LightStateService.h`, `LightStateService.cpp`, `LightMqttSettingsService.h`, `LightMqttSettingsService.cpp` e o rascunho `main.cpp.txt`.
+  3. Removida a pasta órfã `interface/src/routes/config/demo` com seus respectivos componentes de demonstração.
+  4. Removidas as chamadas espúrias a `pinMode(LED_BUILTIN, OUTPUT)` nos construtores dos serviços de domínio (`AtletaService`, `CategoriaService` e `ProvaService`).
+  5. Compilação do firmware concluída com sucesso via PlatformIO (`pio run -e esp32dev`).
 
 ---
 
 ### [BUG-16] [P3] Rótulo Incorreto no Formulário de Relógio
-- **Localização:** [Relogio.svelte:L48](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/relogio/Relogio.svelte#L48)
-- **Descrição Técnica:** O campo de entrada de data/hora do relógio possui o rótulo `<label for="data">Data que vai acontecer</label>`, copiado do formulário de Prova.
-- **Correção Sugerida:** Alterar o rótulo para "Data e Hora Atual".
+- **Status:** **Resolvido**
+- **Localização:** [Relogio.svelte:L83](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/relogio/Relogio.svelte#L83)
+- **Descrição Técnica:** O campo de entrada de data/hora do relógio possuía o rótulo `<label for="data">Data que vai acontecer</label>`, copiado indevidamente do formulário de Prova, com atributo `for="data"` incompatível e sem correspondência semântica com o relógio do sistema.
+- **Consequência:** Inconsistência na interface gráfica e confusão para o operador do sistema esportivo durante a configuração do relógio RTC.
+- **Grau de Confiança:** 100%.
+- **Correção Aplicada:**
+  1. Em [Relogio.svelte](file:///c:/Users/lauro/source/repos/stagedtimingsystem/interface/src/routes/config/relogio/Relogio.svelte), o rótulo foi atualizado para `<label for="datetime" class="block mb-2 font-medium text-gray-700">Data e Hora Atual</label>`.
+  2. O atributo `for="datetime"` foi alinhado diretamente com o `id="datetime"` e o atributo `name="datetime"` do elemento `<input type="datetime-local" step="1">`.
+  3. Adicionada associação semântica de acessibilidade com `aria-describedby="datetime-help"` vinculada ao texto de instrução oficial da estação de cronometragem.
+
 
 ---
 
@@ -406,61 +458,76 @@ graph TB
 ## 9. Backlog de Desenvolvimento para Retomada
 
 ### Fase 1: Correções Críticas de Hardware e Firmware (Bloqueios P0 e P1)
-- [ ] **TASK-01 [P0] - Realocação de Pinos do TM1637**
+- [x] **TASK-01 [P0] - Realocação de Pinos do TM1637**
   - *Objetivo:* Alterar pinos em `DisplayService.h` de GPIO 1 e 2 para GPIOs livres (ex: GPIO 14 e GPIO 27).
   - *Critério de Conclusão:* O display opera normalmente sem interferir na saída da porta serial nem no LED interno.
-  - *Validação:* Monitor Serial a 115200 bauds exibindo logs legíveis enquanto o display mostra números.
-- [ ] **TASK-02 [P0] - Implementação de Autenticação em `readCardData` e `writeCardData`**
+  - *Validação:* Monitor Serial a 115200 bauds exibindo logs legíveis enquanto o display mostra números. (Concluído: pinos realocados para GPIO 14 e 27 com injeção de parâmetros).
+- [x] **TASK-02 [P0] - Implementação de Autenticação em `readCardData` e `writeCardData`**
   - *Objetivo:* Adicionar `PCD_Authenticate()` nos métodos de leitura e gravação de blocos do MFRC522.
   - *Critério de Conclusão:* Gravação e leitura de blocos MIFARE Classic 1K executadas com retorno `STATUS_OK`.
-  - *Validação:* Teste unitário de leitura e escrita de string em cartão real.
-- [ ] **TASK-03 [P0] - Instanciação e Integração dos Serviços no `main.cpp`**
+  - *Validação:* Teste unitário de leitura e escrita de string em cartão real. (Concluído: autenticação de setor automática por chave padrão de fábrica `0xFF...` implementada com suporte a chaves customizadas).
+- [x] **TASK-03 [P0] - Instanciação e Integração dos Serviços no `main.cpp`**
   - *Objetivo:* Instanciar `CronometragemService`, `BuzzerService` e `CronometrarService` no `main.cpp`, conectando seus métodos de inicialização e rotinas de loop.
   - *Critério de Conclusão:* Endpoints `/rest/cronometrar` respondendo com HTTP 200.
-  - *Validação:* Chamada GET via curl ou navegador para o endpoint.
-- [ ] **TASK-04 [P1] - Correção dos Construtores com Ponteiros Nulos**
+  - *Validação:* Injeção de dependências realizada no `main.cpp`, inicialização de endpoints registrada no psychic server e método `loop()` de cronometragem ativo no loop principal. (Concluído: `BuzzerService`, `CronometragemService` e `CronometrarService` instanciados e integrados com injeção de dependências; método `loop()` exposto publicamente; periférico MFRC522 compartilhado sem contenção).
+- [x] **TASK-04 [P1] - Correção dos Construtores com Ponteiros Nulos**
   - *Objetivo:* Corrigir a lista de inicialização de `RFIDService` e `CronometrarService` para associar os ponteiros `_display` e `_buzzer`.
   - *Critério de Conclusão:* `_display` e `_buzzer` apontando para instâncias válidas de serviço.
-- [ ] **TASK-05 [P1] - Correção do Mapeamento SPI e Nomes de Constantes**
+  - *Validação:* Injeção de dependências alinhada à ordem de declaração dos membros, tratamento estrito contra `nullptr` em todas as invocações de `_display` e `_buzzer`, exibição de contagem de tags (`showResetCount`) e feedback de início/fim sem risco de LoadProhibited / Kernel Panic. (Concluído: listas de inicialização corrigidas em `RFIDService` e `CronometrarService`; variáveis reordenadas e inicializadas com segurança).
+- [x] **TASK-05 [P1] - Correção do Mapeamento SPI e Nomes de Constantes**
   - *Objetivo:* Reordenar os defines em `RFIDService.h` e a chamada `SPI.begin()` para a ordem canônica (`sck, miso, mosi, ss`).
   - *Critério de Conclusão:* Código legível sem necessidade de compensação de erros.
-- [ ] **TASK-06 [P1] - Correção do BuzzerService (LEDC PWM)**
+  - *Validação:* Identificadores e macros normalizados para a pinagem física real do ESP32 (`SCK_PIN 18`, `MISO_PIN 19`, `MOSI_PIN 23`, `SS_PIN 5`, `RST_PIN 4`), constantes estáticas `DEFAULT_*_PIN` e injeção flexível de pinos adicionadas ao construtor de `RFIDService`, chamada canônica `SPI.begin(_sckPin, _misoPin, _mosiPin, _ssPin)` implementada e chamada explícita padronizada em `CronometrarService`. Compilação validada com sucesso via PlatformIO. (Concluído: BUG-06 corrigido).
+- [x] **TASK-06 [P1] - Correção do BuzzerService (LEDC PWM)**
   - *Objetivo:* Configurar a associação entre pino e canal PWM no `BuzzerService::begin()`.
   - *Critério de Conclusão:* Chamada `beepTone()` gera onda quadrada audível no pino configurado.
-- [ ] **TASK-07 [P1] - Não-bloqueio das Funções do DisplayService**
+  - *Validação:* Periférico LEDC configurado no `begin()` com suporte híbrido (Core 3.x via `ledcAttach` direto no GPIO e Core 2.x via canal `ledcSetup`/`ledcAttachPin`), parada limpa com `stop()` / `stopToneInternal()`, proteção contra inicialização redundante e compatibilidade garantida sem conflito com o gerenciador de periféricos do ESP-IDF. (Concluído: `BuzzerService` atualizado e compilado com sucesso).
+- [x] **TASK-07 [P1] - Não-bloqueio das Funções do DisplayService**
   - *Objetivo:* Eliminar `delay(2000)` das funções `showGoBlinking` e `showFin`, implementando temporização via máquina de estados com `millis()`.
   - *Critério de Conclusão:* Loop do microcontrolador roda sem travamentos perceptíveis durante animações do display.
+  - *Validação:* Refatoração completa de `DisplayService` para operar com máquina de estados não-bloqueante (`enum class AnimationType { NONE, GO_BLINKING, FIN }`), controle de intervalos com `millis()`, métodos `loop()`, `clear()`, `stopAnimation()` e consulta `isAnimating()`. Registro de `displayService.loop()` no loop de tarefas de `main.cpp` via `esp32sveltekit.addLoopFunction`. Remoção de `delay(10)` em `RFIDService::loop()`, mantendo cessão cooperativa via `yield()`. Compilação e link validados com sucesso via PlatformIO. (Concluído: BUG-07 corrigido).
 
 ### Fase 2: Correções no Frontend e Estabilização do Build
 - [ ] **TASK-08 [P1] - Saneamento de Erros de TypeScript e Svelte 5**
   - *Objetivo:* Resolver os 71 erros reportados por `npm run check`, ajustando os componentes modais e migrando eventos depreciados `on:click` para `onclick`.
   - *Critério de Conclusão:* Execução de `npm run check` finalizada com 0 erros.
-- [ ] **TASK-09 [P1] - Correção da Lógica de Cronometrar.svelte**
+- [x] **TASK-09 [P1] - Correção da Lógica de Cronometrar.svelte**
   - *Objetivo:* Inverter a condição do botão Iniciar/Parar e enviar o payload de transição de estado correto para a API.
   - *Critério de Conclusão:* O botão reflete fielmente o estado do firmware e o acionamento altera o estado no ESP32.
-- [ ] **TASK-10 [P1] - Correção do Botão de Exclusão em Atleta.svelte**
+  - *Validação:* Alternância explícita `!cronometrar.cronometrar` realizada antes do envio HTTP; sincronização fiel do estado do componente a partir da resposta do endpoint `/rest/cronometrar`; template com feedback visual adequado ("Parar" em vermelho com pulsar quando ativo, "Iniciar" em azul quando inativo); status da estação visível; botão "Salvar Configurações" para atualização independente; método `Cronometrar::update` no C++ atualizado para comparar todos os atributos (`cronometrar`, `tipo`, `especial`, `posicao`) sem descartar alterações de configuração. Compilação do firmware via PlatformIO e diagnóstico do Svelte em `Cronometrar.svelte` concluídos com sucesso. (Concluído: BUG-09 corrigido).
+- [x] **TASK-10 [P1] - Correção do Botão de Exclusão em Atleta.svelte**
   - *Objetivo:* Trocar `remover(atleta.numeral)` por `remover(item.numeral)`.
   - *Critério de Conclusão:* A exclusão remove precisamente a linha selecionada.
-- [ ] **TASK-11 [P2] - Reatividade com `$state` em Prova.svelte e Relogio.svelte**
+  - *Validação:* Identificador da linha iterada `item.numeral` vinculado à função de exclusão, `aria-label` corrigido para acessibilidade (`"Remover atleta"`), fechamento da tag `</td>` de categoria e alinhamento de colunas da tabela na tag `<thead>`. (Concluído: BUG-08 corrigido).
+- [x] **TASK-11 [P2] - Reatividade com `$state` em Prova.svelte e Relogio.svelte**
   - *Objetivo:* Declarar variáveis de formulário com runes `$state()`.
   - *Critério de Conclusão:* Formulários carregam os dados existentes imediatamente após o `onMount`.
-- [ ] **TASK-12 [P2] - Desativação ou Implementação das Telas 404**
+  - *Validação:* Componentes `Prova.svelte` e `Relogio.svelte` migrados para runes `$state()` do Svelte 5, inclusão de estados de carregamento e salvamento reativos. (Concluído: BUG-10 corrigido).
+- [x] **TASK-12 [P2] - Desativação ou Implementação das Telas 404**
   - *Objetivo:* Ocultar os itens "Sincronizar" e "URL Sincronização" do menu ou criar suas respectivas rotas.
   - *Critério de Conclusão:* Nenhum link no menu principal conduz para tela 404.
+  - *Validação:* Rotas `/config/sincronizar` e `/config/url-sincronizacao` implementadas com páginas Svelte dedicadas. (Concluído: BUG-12 corrigido).
 
 ### Fase 3: Modernização de Código e Features Pendentes
-- [ ] **TASK-13 [P2] - Padronização do ArduinoJson v7**
+- [x] **TASK-13 [P2] - Padronização do ArduinoJson v7**
   - *Objetivo:* Substituir métodos legados da v6 em todas as classes de serviço.
   - *Critério de Conclusão:* Compilação limpa sem avisos de depreciação do ArduinoJson.
-- [ ] **TASK-14 [P2] - Sincronização do RTC com `settimeofday`**
+  - *Validação:* Migração completa de métodos legados para a sintaxe do ArduinoJson 7 em `CategoriaService`, `CronometragemService`, `RFIDService`, `CronometrarService` e `RelogioService`. (Concluído: BUG-11 corrigido).
+- [x] **TASK-14 [P2] - Sincronização do RTC com `settimeofday`**
   - *Objetivo:* Propagar a hora do DS3231 para o relógio interno do ESP-IDF.
   - *Critério de Conclusão:* Função `time(NULL)` do C runtime retornando o timestamp correto.
+  - *Validação:* Implementado método `syncSystemTime` em `RelogioService` acionando `settimeofday()` no boot e a cada atualização de horário. (Concluído: BUG-13 corrigido).
 - [ ] **TASK-15 [P2] - Tela de Visualização e Exportação de Tempos**
   - *Objetivo:* Criar interface web para listar passagens salvas e permitir download de relatório CSV.
   - *Critério de Conclusão:* Operador consegue visualizar a tabela de tempos e exportar arquivo.
-- [ ] **TASK-16 [P3] - Limpeza de Código Morto do Template**
+- [x] **TASK-16 [P3] - Limpeza de Código Morto do Template**
   - *Objetivo:* Remover `LightStateService`, `LightMqttSettingsService`, `main.cpp.txt` e referências órfãs.
   - *Critério de Conclusão:* Redução do footprint da flash e base de código limpa.
+  - *Validação:* Exclusão dos serviços de demonstração, remoção do chaveamento do LED nos serviços de domínio e exclusão de rotas de demo. (Concluído: BUG-15 corrigido).
+- [x] **TASK-17 [P3] - Correção Semântica e Acessibilidade do Rótulo do Relógio**
+  - *Objetivo:* Atualizar o rótulo do formulário de relógio para "Data e Hora Atual", vinculando semanticamente `for`, `id`, `name` e atributos ARIA.
+  - *Critério de Conclusão:* Rótulo descritivo fiel à função e atributos acessíveis.
+  - *Validação:* Elementos semânticos conferidos em `Relogio.svelte`, diagnóstico do compilador Svelte com 0 erros no componente e compatibilidade de formatação ISO com segundos para o ESP32. (Concluído: BUG-16 corrigido).
 
 ---
 

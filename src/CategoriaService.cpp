@@ -11,10 +11,7 @@ CategoriaService::CategoriaService(PsychicHttpServer *server,
                                                              AuthenticationPredicates::IS_AUTHENTICATED),
                                                 _fsPersistence(Categoria::read, Categoria::update, this, sveltekit->getFS(), "/config/categoria.json")
 {
-    // configure led to be output
-    pinMode(LED_BUILTIN, OUTPUT);
-
-    // configure settings service update handler to update LED state
+    // configure settings service update handler
     addUpdateHandler([&](const String &originId)
                      { onConfigUpdated(); },
                      false);

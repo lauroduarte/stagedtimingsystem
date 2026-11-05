@@ -1,7 +1,7 @@
 import type { PageLoad } from './$types';
 
-export const load = (async ({ fetch }) => {
+export const load = (async () => {
 	return {
-		title: 'Demo App'
+		title: 'URL Sincronização'
 	};
 }) satisfies PageLoad;

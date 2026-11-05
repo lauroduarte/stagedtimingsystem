@@ -10,7 +10,7 @@
 	import Info from '~icons/tabler/info-circle';
 	import type { BrokerSettings } from '$lib/types/models';
 
-	let brokerSettings: BrokerSettings = $state();
+	let brokerSettings: BrokerSettings = $state()!;
 
 	let formField: any = $state();
 
@@ -87,12 +87,11 @@
 		// Submit JSON to REST API
 		if (valid) {
 			postBrokerSettings();
-			//alert('Form Valid');
 		}
 	}
 
-	function preventDefault(fn) {
-		return function (event) {
+	function preventDefault(fn: (event: Event) => void) {
+		return function (this: unknown, event: Event) {
 			event.preventDefault();
 			fn.call(this, event);
 		};

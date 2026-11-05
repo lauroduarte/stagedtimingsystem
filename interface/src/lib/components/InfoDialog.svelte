@@ -8,17 +8,17 @@
 
 	interface Props {
 		isOpen: boolean;
-		title: string;
-		message: string;
-		onDismiss: any;
+		title?: string;
+		message?: string;
+		onDismiss?: any;
 		dismiss?: any;
 	}
 
 	const {
 		isOpen,
-		title,
-		message,
-		onDismiss,
+		title = '',
+		message = '',
+		onDismiss = () => {},
 		dismiss = { label: 'Dismiss', icon: Check }
 	}: Props = $props();
 </script>

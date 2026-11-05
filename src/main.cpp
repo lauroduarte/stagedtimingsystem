@@ -12,25 +12,25 @@
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
  **/
 
+#include <WiFi.h>
 #include <ESP32SvelteKit.h>
-#include <LightStateService.h>
 #include <PsychicHttpServer.h>
 #include <ProvaService.h>
 #include <CategoriaService.h>
 #include <AtletaService.h>
 #include <RelogioService.h>
 #include <RFIDService.h>
+#include <DisplayService.h>
+#include <BuzzerService.h>
+#include <CronometragemService.h>
+#include <CronometrarService.h>
+#include <SyncService.h>
 
 #define SERIAL_BAUD_RATE 115200
 
 PsychicHttpServer server;
 
-ESP32SvelteKit esp32sveltekit(&server, 130);
-
-
-
-LightStateService lightStateService = LightStateService(&server,
-                                                        &esp32sveltekit);
+ESP32SvelteKit esp32sveltekit(&server, 150);
 
 ProvaService provaService = ProvaService(&server,
                                                         &esp32sveltekit,
@@ -51,10 +51,39 @@ RelogioService relogioService = RelogioService(&server,
 
 DisplayService displayService = DisplayService();
 
+BuzzerService buzzerService = BuzzerService();
+
 RFIDService rfidService = RFIDService(&server,
                                                         &esp32sveltekit,
-                                                        esp32sveltekit.getSecurityManager(), &displayService, esp32sveltekit.getFS());  
-                                                
+                                                        esp32sveltekit.getSecurityManager(),
+                                                        &displayService,
+                                                        esp32sveltekit.getFS(),
+                                                        &buzzerService);  
+
+CronometragemService cronometragemService = CronometragemService(&server,
+                                                                &esp32sveltekit,
+                                                                esp32sveltekit.getFS());
+
+CronometrarService cronometrarService = CronometrarService(&server,
+                                                          &esp32sveltekit,
+                                                          esp32sveltekit.getFS(),
+                                                          rfidService.getRFID(),
+                                                          &buzzerService,
+                                                          &displayService,
+                                                          &cronometragemService,
+                                                          &rfidService,
+                                                          &atletaService,
+                                                          &provaService);
+
+SyncService syncService = SyncService(&server,
+                                      &esp32sveltekit,
+                                      &provaService,
+                                      &categoriaService,
+                                      &atletaService,
+                                      &rfidService,
+                                      &relogioService,
+                                      &cronometrarService,
+                                      &cronometragemService);
 
 void setup()
 {
@@ -62,12 +91,12 @@ void setup()
     Serial.begin(SERIAL_BAUD_RATE);
     while(!Serial);
 
-    // start ESP32-SvelteKit
-    esp32sveltekit.begin();
+    // Evita modem sleep do WiFi para estabilidade da conexão e baixa latência
+    WiFi.setSleep(false);
 
-    // load the initial light settings
-    lightStateService.begin();
-    // start the light service
+    // start ESP32-SvelteKit
+    server.config.stack_size = 24576;
+    esp32sveltekit.begin();
 
     // start the prova service
     provaService.begin();
@@ -81,15 +110,57 @@ void setup()
     // start the relogio service
     relogioService.begin();
 
+    // start the display service
+    displayService.begin();
+
+    // start the buzzer service
+    buzzerService.begin();
+
+    // exclusão mútua entre Modo Reset e Modo Cronometragem (BL-01)
+    rfidService.setOnResetStartedCallback([]() {
+        cronometrarService.stopCronometragem();
+    });
+    rfidService.setIsCronometrandoCallback([]() {
+        return cronometrarService.isCronometrando();
+    });
+
+    // Bloqueia alteração do relógio e varredura Wi-Fi STA durante cronometragem ativa (P3-02, P1-05)
+    relogioService.setIsCronometrandoCallback([]() {
+        return cronometrarService.isCronometrando();
+    });
+    esp32sveltekit.getWiFiSettingsService()->setCronometrandoCallback([]() {
+        return cronometrarService.isCronometrando();
+    });
+
     // start the RFID service
     rfidService.begin();
 
-    esp32sveltekit.addLoopFunction([]() {
-        rfidService.loop();
-    });
+    // start the cronometragem service
+    cronometragemService.begin();
+
+    // start the cronometrar service
+    cronometrarService.begin();
+
+    // start the sync service (RF-06, RF-07, RF-12 / BL-10, BL-11)
+    syncService.begin();
 }
 
 void loop()
 {
-    vTaskDelete(NULL);
+    buzzerService.loop();
+    displayService.loop();
+    relogioService.loop();
+    if (!rfidService.isResetMode() && !displayService.isAnimating())
+    {
+        static unsigned long lastClockUpdateMs = 0;
+        unsigned long nowMs = millis();
+        if (nowMs - lastClockUpdateMs >= 1000)
+        {
+            lastClockUpdateMs = nowMs;
+            displayService.showClock(Relogio::getNow());
+        }
+    }
+    rfidService.loop();
+    cronometrarService.loop();
+    delay(10);
 }

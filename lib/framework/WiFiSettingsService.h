@@ -217,6 +217,7 @@ public:
     void loop();
     String getHostname();
     String getIP();
+    void setCronometrandoCallback(std::function<bool()> callback) { _isCronometrandoCallback = callback; }
 
 private:
     PsychicHttpServer *_server;
@@ -226,6 +227,7 @@ private:
     EventSocket *_socket;
     unsigned long _lastConnectionAttempt;
     unsigned long _lastRssiUpdate;
+    std::function<bool()> _isCronometrandoCallback{nullptr};
 
     bool _stopping;
     void onStationModeDisconnected(WiFiEvent_t event, WiFiEventInfo_t info);

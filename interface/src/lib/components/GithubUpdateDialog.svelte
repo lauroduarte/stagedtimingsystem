@@ -8,6 +8,7 @@
 	// provided by <Modals />
 	interface Props {
 		isOpen: boolean;
+		onConfirm?: any;
 	}
 
 	let { isOpen }: Props = $props();
@@ -29,7 +30,7 @@
 	});
 
 	let message = $state('Preparing ...');
-	let timerId: number = $state();
+	let timerId: ReturnType<typeof setTimeout> | undefined = $state();
 
 	$effect(() => {
 		if ($telemetry.download_ota.status == 'progress') {

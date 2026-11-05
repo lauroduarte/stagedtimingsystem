@@ -15,10 +15,10 @@
 	// provided by <Modals />
 	interface Props {
 		isOpen: boolean;
-		storeNetwork: any;
+		storeNetwork?: any;
 	}
 
-	const { isOpen, storeNetwork }: Props = $props();
+	const { isOpen, storeNetwork = () => {} }: Props = $props();
 
 	const encryptionType = [
 		'Open',
@@ -36,11 +36,11 @@
 
 	let scanActive = $state(false);
 
-	let pollingId: number;
+	let pollingId: ReturnType<typeof setInterval> | undefined;
 
 	async function scanNetworks() {
 		scanActive = true;
-		const scan = await fetch('/rest/scanNetworks', {
+		await fetch('/rest/scanNetworks', {
 			method: 'GET',
 			headers: {
 				Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
@@ -67,7 +67,7 @@
 			if (listOfNetworks.length) {
 				scanActive = false;
 				clearInterval(pollingId);
-				pollingId = 0;
+				pollingId = undefined;
 				return true;
 			} else {
 				scanActive = false;
@@ -85,7 +85,7 @@
 	onDestroy(() => {
 		if (pollingId) {
 			clearInterval(pollingId);
-			pollingId = 0;
+			pollingId = undefined;
 		}
 	});
 </script>
@@ -109,10 +109,12 @@
 					</div>
 				{:else}
 					<ul class="menu w-full">
-						{#each listOfNetworks as network, i}
+						{#each listOfNetworks as network}
 							<li>
 								<!-- svelte-ignore a11y_click_events_have_key_events -->
 								<div
+									role="button"
+									tabindex="0"
 									class="bg-base-200 rounded-btn my-1 flex items-center space-x-3 hover:scale-[1.02] active:scale-[0.98]"
 									onclick={() => {
 										storeNetwork(network.ssid);

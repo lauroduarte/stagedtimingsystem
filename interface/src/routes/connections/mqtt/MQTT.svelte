@@ -13,8 +13,8 @@
 	import Client from '~icons/tabler/robot';
 	import type { MQTTSettings, MQTTStatus } from '$lib/types/models';
 
-	let mqttSettings: MQTTSettings = $state();
-	let mqttStatus: MQTTStatus = $state();
+	let mqttSettings: MQTTSettings = $state()!;
+	let mqttStatus: MQTTStatus = $state()!;
 
 	let formField: any = $state();
 
@@ -117,12 +117,11 @@
 		// Submit JSON to REST API
 		if (valid) {
 			postMQTTSettings(mqttSettings);
-			//alert('Form Valid');
 		}
 	}
 
-	function preventDefault(fn) {
-		return function (event) {
+	function preventDefault(fn: (event: Event) => void) {
+		return function (this: unknown, event: Event) {
 			event.preventDefault();
 			fn.call(this, event);
 		};

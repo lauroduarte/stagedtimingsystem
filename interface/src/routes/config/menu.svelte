@@ -13,6 +13,7 @@
 	import Logout from '~icons/tabler/logout';
 	import Copyright from '~icons/tabler/copyright';
 	import Link from '~icons/tabler/link';
+	import LayoutDashboard from '~icons/tabler/layout-dashboard';
 	import { page } from '$app/state';
 	import { user } from '$lib/stores/user';
 
@@ -41,15 +42,15 @@
 
 	let menuItems = $state([
 		{
-			title: 'Prova',
-			icon: Flag,
-			href: '/config/prova',
+			title: 'Resumo',
+			icon: LayoutDashboard,
+			href: '/config',
 			feature: true
 		},
 		{
-			title: 'Demo',
+			title: 'Prova',
 			icon: Flag,
-			href: '/config/demo',
+			href: '/config/prova',
 			feature: true
 		},
 		{
@@ -83,7 +84,7 @@
 			feature: true
 		},
 		{
-			title: 'Resetar Chaveiros RFID',
+			title: 'Reset / Nova Prova',
 			icon: Eraser,
 			href: '/config/reset',
 			feature: true
@@ -97,14 +98,21 @@
 		{
 			title: 'Users',
 			icon: Users,
-			href: '/user',
+			href: '/config/user',
 			feature: page.data.features.security && $user.admin
 		}																
 	] as menuItem[]);
 
 	function setActiveMenuItem(targetTitle: string) {
 		menuItems.forEach((item) => {
-			item.active = item.title === targetTitle;
+			item.active =
+				item.title === targetTitle ||
+				(item.href === '/config/reset' &&
+					(targetTitle === 'Reset / Nova Prova' ||
+						targetTitle === 'Resetar Chaveiros RFID' ||
+						targetTitle === 'Reset')) ||
+				(item.href === '/config' &&
+					(targetTitle === 'Resumo das Configurações' || targetTitle === 'Resumo'));
 			item.submenu?.forEach((subItem) => {
 				subItem.active = subItem.title === targetTitle;
 			});
@@ -122,7 +130,7 @@
 	<a
 		href="/config"
 		class="rounded-box mb-4 flex items-center hover:scale-[1.02] active:scale-[0.98]"
-		onclick={() => setActiveMenuItem('')}
+		onclick={() => setActiveMenuItem('Resumo')}
 	>
 		<img src={logo} alt="Logo" class="h-12 w-12" />
 		<h1 class="px-4 text-2xl font-bold">{page.data.appName}</h1>

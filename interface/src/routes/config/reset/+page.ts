@@ -1,7 +1,7 @@
 import type { PageLoad } from './$types';
 
-export const load = (async ({ fetch }) => {
+export const load = (async () => {
 	return {
-		title: 'Resetar Chaveiros'
+		title: 'Reset / Nova Prova'
 	};
 }) satisfies PageLoad;

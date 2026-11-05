@@ -8,9 +8,10 @@
 	import Warning from '~icons/tabler/alert-triangle';
 	import Cancel from '~icons/tabler/x';
 
-	let files: FileList = $state();
+	let files: FileList | undefined = $state();
 
 	async function uploadBIN() {
+		if (!files || files.length === 0) return;
 		try {
 			const formData = new FormData();
 			formData.append('file', files[0]);
@@ -21,7 +22,7 @@
 				},
 				body: formData
 			});
-			const result = await response.json();
+			await response.json();
 		} catch (error) {
 			console.error('Error:', error);
 		}

@@ -131,36 +131,45 @@ esp_err_t PsychicRequest::loadBody()
     this->_body = String();
 
     size_t remaining = this->_req->content_len;
-    size_t actuallyReceived = 0;
-    char *buf = (char *)malloc(remaining + 1);
-    if (buf == NULL)
+    if (remaining == 0)
     {
-        ESP_LOGE(PH_TAG, "Failed to allocate memory for body");
+        return ESP_OK;
+    }
+
+    // P0-06: Alocação única no String sem buffer intermediário duplo no Heap
+    if (!this->_body.reserve(remaining))
+    {
+        ESP_LOGE(PH_TAG, "Failed to allocate memory for body (%u bytes)", (unsigned int)remaining);
         return ESP_FAIL;
     }
 
+    char chunk[512];
     while (remaining > 0)
     {
-        int received = httpd_req_recv(this->_req, buf + actuallyReceived, remaining);
+        size_t toRead = (remaining > sizeof(chunk)) ? sizeof(chunk) : remaining;
+        int received = httpd_req_recv(this->_req, chunk, toRead);
 
         if (received == HTTPD_SOCK_ERR_TIMEOUT)
         {
             continue;
         }
-        else if (received == HTTPD_SOCK_ERR_FAIL)
+        else if (received <= 0)
         {
-            ESP_LOGE(PH_TAG, "Failed to receive data.");
+            ESP_LOGE(PH_TAG, "Failed to receive data (err: %d).", received);
+            err = ESP_FAIL;
+            break;
+        }
+
+        if (!this->_body.concat(chunk, received))
+        {
+            ESP_LOGE(PH_TAG, "Failed to append data to body");
             err = ESP_FAIL;
             break;
         }
 
         remaining -= received;
-        actuallyReceived += received;
     }
 
-    buf[actuallyReceived] = '\0';
-    this->_body = String(buf);
-    free(buf);
     return err;
 }
 

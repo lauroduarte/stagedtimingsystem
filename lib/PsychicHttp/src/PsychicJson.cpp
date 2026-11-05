@@ -31,6 +31,15 @@ size_t PsychicJsonResponse::getLength()
 
 esp_err_t PsychicJsonResponse::send()
 {
+  #if ARDUINOJSON_VERSION_MAJOR >= 7
+    if (_jsonBuffer.overflowed())
+    {
+      ESP_LOGE("PsychicJson", "JsonDocument overflowed before sending response");
+      httpd_resp_send_err(this->_request->request(), HTTPD_500_INTERNAL_SERVER_ERROR, "JSON memory overflow.");
+      return ESP_FAIL;
+    }
+  #endif
+
   esp_err_t err = ESP_OK;
   size_t length = getLength();
   size_t buffer_size;
@@ -113,6 +122,7 @@ esp_err_t PsychicJsonHandler::handleRequest(PsychicRequest *request)
     #ifdef ARDUINOJSON_6_COMPATIBILITY
       DynamicJsonDocument jsonBuffer(this->_maxJsonBufferSize);
       DeserializationError error = deserializeJson(jsonBuffer, request->body());
+      request->clearBody();
       if (error)
         return request->reply(400);
 
@@ -120,6 +130,7 @@ esp_err_t PsychicJsonHandler::handleRequest(PsychicRequest *request)
     #else
       JsonDocument jsonBuffer;
       DeserializationError error = deserializeJson(jsonBuffer, request->body());
+      request->clearBody();
       if (error)
         return request->reply(400);
 

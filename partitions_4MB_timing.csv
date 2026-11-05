@@ -1,0 +1,12 @@
+# Tabela de partições customizada para ESP32 de 4 MB — Staged Timing System
+# Opção A: Sem OTA — Máximo Armazenamento para LittleFS (P0-03)
+# Total Flash: 4 MB (0x400000 = 4.194.304 B)
+# app0 = 2.240 KB (0x230000 = 2.293.760 B)
+# spiffs (LittleFS) = 1.664 KB (0x1A0000 = 1.703.936 B = 416 setores de 4 KB, 13x maior que min_spiffs)
+
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+otadata,  data, ota,     0xe000,   0x2000,
+app0,     app,  ota_0,   0x10000,  0x230000,
+spiffs,   data, spiffs,  0x240000, 0x1A0000,
+

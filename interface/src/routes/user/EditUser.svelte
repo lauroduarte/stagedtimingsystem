@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { modals } from 'svelte-modals';
 	import { fly } from 'svelte/transition';
 	import InputPassword from '$lib/components/InputPassword.svelte';
@@ -10,21 +10,27 @@
 
 	interface Props {
 		isOpen: boolean;
-		title: string;
-		onSaveUser: any;
+		title?: string;
+		onSaveUser?: any;
 		user?: any;
 	}
 
 	let {
 		isOpen,
-		title,
-		onSaveUser,
-		user = $bindable({
+		title = '',
+		onSaveUser = () => {},
+		user: initialUser = {
 			username: '',
 			password: '',
 			admin: false
-		})
+		}
 	}: Props = $props();
+
+	let user = $state({
+		username: initialUser.username ?? '',
+		password: initialUser.password ?? '',
+		admin: Boolean(initialUser.admin)
+	});
 
 	let errorUsername = $state(false);
 
@@ -47,8 +53,8 @@
 		}
 	}
 
-	function preventDefault(fn) {
-		return function (event) {
+	function preventDefault(fn: (event: Event) => void) {
+		return function (this: unknown, event: Event) {
 			event.preventDefault();
 			fn.call(this, event);
 		};

@@ -55,7 +55,7 @@ public:
                         {
                             return request->reply(200);
                         },
-                        AuthenticationPredicates::IS_AUTHENTICATED));
+                        AuthenticationPredicates::NONE_REQUIRED));
 #endif
 
         // GET

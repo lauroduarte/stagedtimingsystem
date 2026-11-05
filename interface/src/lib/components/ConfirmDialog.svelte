@@ -9,17 +9,17 @@
 
 	interface Props {
 		isOpen: boolean;
-		title: string;
-		message: string;
-		onConfirm: any;
+		title?: string;
+		message?: string;
+		onConfirm?: any;
 		labels?: any;
 	}
 
 	let {
 		isOpen,
-		title,
-		message,
-		onConfirm,
+		title = '',
+		message = '',
+		onConfirm = () => {},
 		labels = {
 			cancel: { label: 'Cancel', icon: Cancel },
 			confirm: { label: 'OK', icon: Check }
